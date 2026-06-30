@@ -3,6 +3,6 @@
 //   - SUPABASE_URL    : 「Project URL」(例 https://abcd1234.supabase.co)
 //   - SUPABASE_ANON_KEY: 「anon public」キー
 window.APP_CONFIG = {
-  SUPABASE_URL: "https://YOUR-PROJECT-REF.supabase.co",
-  SUPABASE_ANON_KEY: "YOUR-ANON-PUBLIC-KEY"
+  SUPABASE_URL: "https://xtkphviiclzxszhlbwts.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_MM2OTnGZw55BIi1C-oTS1Q_pqNMUt8b"
 };
