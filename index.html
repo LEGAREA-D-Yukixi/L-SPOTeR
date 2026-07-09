@@ -10,7 +10,7 @@
   :root{
     --bg:#1c1c1e; --panel:#2c2c2e; --panel2:#3a3a3c; --line:#48484a;
     --text:#f2f2f7; --muted:#9b9ba0; --accent:#3b82f6; --danger:#ff453a; --ok:#30d158;
-    --row-h:46px; --px-per-hour:80px; --gutter:150px;
+    --row-h:56px; --px-per-hour:80px; --gutter:150px;
     --start-hour:7; --end-hour:23;
   }
   *{box-sizing:border-box}
@@ -66,7 +66,7 @@
   .hcell{width:var(--px-per-hour);flex:none;font-size:11px;color:var(--muted);padding:8px 0 8px 6px;border-left:1px solid var(--line)}
   .room-row{display:flex;border-bottom:1px solid var(--line)}
   .room-name{min-width:var(--gutter);width:var(--gutter);flex:none;position:sticky;left:0;background:var(--panel);
-    border-right:1px solid var(--line);padding:8px 10px;z-index:5;display:flex;flex-direction:column;justify-content:center}
+    border-right:1px solid var(--line);padding:8px 10px;z-index:5;display:flex;flex-direction:column;justify-content:center;line-height:1.3}
   .room-name b{font-size:13px} .room-name small{color:var(--muted);font-size:11px}
   .track{position:relative;height:var(--row-h)}
   .track .slot{position:absolute;top:0;height:100%;border-left:1px solid var(--line)}
@@ -128,7 +128,7 @@
   <div class="modal" style="max-width:380px">
     <h2>お名前を入力してください</h2>
     <p class="hint" style="margin-bottom:14px">予約の表示名になります。あとで設定から変更できます。</p>
-    <label class="fld"><span>氏名</span><input id="nmInput" type="text" placeholder="例: 土屋 雪哉"></label>
+    <label class="fld"><span>氏名</span><input id="nmInput" type="text" placeholder="山田太郎"></label>
     <button class="btn block" onclick="saveName()">はじめる</button>
     <div id="nmMsg" class="msg"></div>
   </div>
@@ -167,8 +167,8 @@
     <div id="bkHint" class="hint"></div>
     <label class="fld"><span>日付</span><input id="bkDate" type="date"></label>
     <div class="row2">
-      <label class="fld"><span>開始</span><select id="bkStart"></select></label>
-      <label class="fld"><span>終了</span><select id="bkEnd"></select></label>
+      <label class="fld"><span>開始</span><input id="bkStart" type="time" step="60"></label>
+      <label class="fld"><span>終了</span><input id="bkEnd" type="time" step="60"></label>
     </div>
     <label class="fld"><span>件名（任意）</span><input id="bkSubject" type="text" placeholder="例: 定例MTG"></label>
     <label class="fld"><span>参加者（任意・Enterで追加）</span>
@@ -192,8 +192,8 @@
     <h2>空き会議室を探す</h2>
     <label class="fld"><span>日付</span><input id="seDate" type="date"></label>
     <div class="row2">
-      <label class="fld"><span>開始</span><select id="seStart"></select></label>
-      <label class="fld"><span>終了</span><select id="seEnd"></select></label>
+      <label class="fld"><span>開始</span><input id="seStart" type="time" step="60"></label>
+      <label class="fld"><span>終了</span><input id="seEnd" type="time" step="60"></label>
     </div>
     <button class="btn block" onclick="runSearch()">空きを検索</button>
     <div id="seResult" class="list"></div>
@@ -240,7 +240,6 @@ function dayStart(d){ return atLocal(d.getFullYear(),d.getMonth(),d.getDate(),0,
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
 function weekStart(d){ const x=dayStart(d); x.setDate(x.getDate()-x.getDay()); return x; } // Sunday start
 function fmtDateJP(d){ const w=["日","月","火","水","木","金","土"][d.getDay()]; return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日(${w})`; }
-function timeOptions(sel,def){ sel.innerHTML=""; for(let h=START_H;h<=END_H;h++){ for(let m=0;m<60;m+=SLOT){ if(h===END_H&&m>0)break; const v=`${pad(h)}:${pad(m)}`; const o=document.createElement("option"); o.value=v;o.textContent=v; if(v===def)o.selected=true; sel.appendChild(o);} } }
 function minsFrom7(d){ return (d.getHours()-START_H)*60 + d.getMinutes(); }
 function show(id){ $(id).classList.remove("hidden"); }
 function hide(id){ $(id).classList.add("hidden"); }
@@ -283,6 +282,7 @@ function mapAuthError(m){
   if(/Invalid login credentials/i.test(m)) return "メールアドレスまたはパスワードが違います。";
   if(/legarea\.jp/.test(m)) return "legarea.jp のメールアドレスのみ登録できます。";
   if(/Email logins are disabled|Signups not allowed/i.test(m)) return "現在ログインを受け付けていません。管理者にご確認ください。";
+  if(/only request this after|rate limit/i.test(m)) return "短時間に試行しすぎました。数十秒おいて再度お試しください。";
   return m;
 }
 async function logout(){ await sb.auth.signOut(); location.reload(); }
@@ -352,7 +352,6 @@ function renderDay(){
     h+=`<div class="room-row"><div class="room-name"><b>${esc(r.name)}</b>${isLimited(r)?`<small>${hhmmShort(r.bookable_start_time)}〜${hhmmShort(r.bookable_end_time)}のみ</small>`:""}</div>`;
     h+=`<div class="track" style="width:${trackW}px" data-room="${r.id}">`;
     for(let i=0;i<hours;i++) h+=`<div class="slot" style="left:${i*PX_H}px;width:${PX_H}px"></div>`;
-    // now line
     const today=ymd(new Date())===ymd(S.date);
     if(today){ const nm=minsFrom7(new Date()); if(nm>=0&&nm<=hours*60) h+=`<div class="nowline" style="left:${nm/60*PX_H}px"></div>`; }
     for(const b of S.bookings.filter(x=>x.room_id===r.id)){
@@ -364,10 +363,9 @@ function renderDay(){
     h+=`</div></div>`;
   }
   host.innerHTML=h;
-  // click empty slot -> create
   host.querySelectorAll(".track").forEach(t=>{
     t.addEventListener("click",ev=>{
-      if(ev.target.classList.contains("ev"))return;
+      if(ev.target.closest(".ev"))return;           // 予約ブロック内のクリックは無視(編集はブロック側で処理)
       const rect=t.getBoundingClientRect(); const x=ev.clientX-rect.left;
       let mins=Math.round((x/PX_H*60)/SLOT)*SLOT; mins=Math.max(0,Math.min(mins,(END_H-START_H)*60-SLOT));
       const h0=START_H+Math.floor(mins/60), m0=mins%60;
@@ -381,7 +379,6 @@ function renderWeek(){
   let h=`<div class="week"><div class="wh"></div>`;
   for(let d=0;d<7;d++){ const dd=addDays(s,d); const today=ymd(dd)===ymd(new Date());
     h+=`<div class="wh ${today?"today":""}">${["日","月","火","水","木","金","土"][dd.getDay()]} ${dd.getMonth()+1}/${dd.getDate()}</div>`; }
-  // time gutter + day columns
   h+=`<div>`; for(let i=START_H;i<END_H;i++) h+=`<div class="tlabel" style="height:48px">${pad(i)}:00</div>`; h+=`</div>`;
   for(let d=0;d<7;d++){
     const dd=addDays(s,d);
@@ -399,7 +396,7 @@ function renderWeek(){
   host.innerHTML=h;
   host.querySelectorAll(".daycol").forEach(col=>{
     col.addEventListener("click",ev=>{
-      if(ev.target.classList.contains("ev"))return;
+      if(ev.target.closest(".ev"))return;           // 予約ブロック内のクリックは無視
       const rect=col.getBoundingClientRect(); const y=ev.clientY-rect.top;
       let mins=Math.round((y/48*60)/SLOT)*SLOT; mins=Math.max(0,Math.min(mins,(END_H-START_H)*60-SLOT));
       const h0=START_H+Math.floor(mins/60), m0=mins%60;
@@ -420,29 +417,28 @@ function openBooking(id, prefill){
   S.editId=id; S.chips=[]; const msg=$("bkMsg"); msg.className="msg"; msg.textContent="";
   $("bkRoom").innerHTML=S.rooms.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join("");
   $("nameOptions").innerHTML=S.names.map(n=>`<option value="${esc(n)}">`).join("");
-  timeOptions($("bkStart"),"10:00"); timeOptions($("bkEnd"),"10:30");
+  $("bkStart").value="10:00"; $("bkEnd").value="11:00";
   $("bkDelete").classList.add("hidden");
   if(id){
     const b=S.bookings.find(x=>x.id===id); if(!b)return;
     const own = b.user_id===S.user.id, canEdit=own, canDelete=own||S.profile.is_admin;
     $("bkTitle").textContent = canEdit?"予約を編集":"予約の詳細";
     $("bkRoom").value=b.room_id; $("bkDate").value=ymd(new Date(b.starts_at));
-    timeOptions($("bkStart"),hm(new Date(b.starts_at))); timeOptions($("bkEnd"),hm(new Date(b.ends_at)));
+    $("bkStart").value=hm(new Date(b.starts_at)); $("bkEnd").value=hm(new Date(b.ends_at));
     $("bkSubject").value=b.title||""; S.chips=[...(b.participants||[])];
     [$("bkRoom"),$("bkDate"),$("bkStart"),$("bkEnd"),$("bkSubject"),$("bkPartInput")].forEach(el=>el.disabled=!canEdit);
     $("bkSave").classList.toggle("hidden",!canEdit);
     $("bkDelete").classList.toggle("hidden",!canDelete);
-    if(!own && !S.profile.is_admin){ /* 詳細のみ */ }
   }else{
-    $("bkTitle").textContent="新規予約";
+    $("bkTitle").textContent="新規予約"; $("bkSubject").value="";
     [$("bkRoom"),$("bkDate"),$("bkStart"),$("bkEnd"),$("bkSubject"),$("bkPartInput")].forEach(el=>el.disabled=false);
     $("bkSave").classList.remove("hidden");
     if(prefill){ $("bkRoom").value=prefill.room; $("bkDate").value=prefill.date;
-      timeOptions($("bkStart"),prefill.start);
-      const [ph,pm]=prefill.start.split(":").map(Number); let em=ph*60+pm+SLOT; timeOptions($("bkEnd"),`${pad(Math.floor(em/60))}:${pad(em%60)}`); }
+      $("bkStart").value=prefill.start;
+      const [ph,pm]=prefill.start.split(":").map(Number); let em=Math.min(ph*60+pm+SLOT, END_H*60);
+      $("bkEnd").value=`${pad(Math.floor(em/60))}:${pad(em%60)}`; }
     else { $("bkDate").value=ymd(S.date); }
   }
-  $("bkSubject").value = id? ($("bkSubject").value): ($("bkSubject").value||"");
   $("bkPartInput").value=""; renderChips(); bkRoomHint(); show("bkView");
 }
 function bkRoomHint(){ const r=roomById($("bkRoom").value);
@@ -455,7 +451,6 @@ async function saveBooking(){
   const msg=$("bkMsg"); msg.className="msg"; msg.textContent="";
   const rid=$("bkRoom").value, date=$("bkDate").value, st=$("bkStart").value, et=$("bkEnd").value;
   if(!rid||!date||!st||!et){ msg.className="msg err"; msg.textContent="会議室・日付・時間を入力してください"; return; }
-  // pending chip
   const pend=$("bkPartInput").value.trim(); if(pend&&!S.chips.includes(pend)) S.chips.push(pend);
   const [y,mo,da]=date.split("-").map(Number); const [sh,sm]=st.split(":").map(Number); const [eh,em]=et.split(":").map(Number);
   const starts=atLocal(y,mo-1,da,sh,sm), ends=atLocal(y,mo-1,da,eh,em);
@@ -465,9 +460,10 @@ async function saveBooking(){
   $("bkSave").disabled=true;
   try{
     let res;
-    if(S.editId) res=await sb.from("bookings").update(payload).eq("id",S.editId);
-    else res=await sb.from("bookings").insert(payload);
+    if(S.editId) res=await sb.from("bookings").update(payload).eq("id",S.editId).select();
+    else res=await sb.from("bookings").insert(payload).select();
     if(res.error) throw res.error;
+    if(!res.data||res.data.length===0){ throw new Error("変更できる権限がありません（自分の予約のみ編集できます）"); }
     closeModal("bkView"); await reload();
   }catch(e){ msg.className="msg err"; msg.textContent=mapBookingError(e); }
   finally{ $("bkSave").disabled=false; }
@@ -475,21 +471,24 @@ async function saveBooking(){
 function mapBookingError(e){
   const m=(e&&e.message)||""; const code=e&&e.code;
   if(code==="23P01"||/no_overlap|exclusion|overlap/i.test(m)) return "この時間帯はすでに予約が入っています。";
-  if(/予約可能|日をまたぐ/.test(m)) return m;            // トリガーの日本語メッセージ
+  if(/予約可能|日をまたぐ/.test(m)) return m;
   if(/check constraint|ends_at/.test(m)) return "時間の指定が正しくありません。";
+  if(/権限/.test(m)) return m;
   return "保存に失敗しました: "+m;
 }
 async function deleteBooking(){
   if(!S.editId) return; if(!confirm("この予約を取り消しますか？")) return;
-  const { error } = await sb.from("bookings").delete().eq("id",S.editId);
+  const { data, error } = await sb.from("bookings").delete().eq("id",S.editId).select();
   if(error){ $("bkMsg").className="msg err"; $("bkMsg").textContent="取消に失敗しました: "+error.message; return; }
+  if(!data||data.length===0){ $("bkMsg").className="msg err"; $("bkMsg").textContent="取消できる権限がありません（自分の予約、または管理者のみ）。"; return; }
   closeModal("bkView"); await reload();
 }
 
 /* ---------- search ---------- */
-function openSearch(){ $("seDate").value=ymd(S.date); timeOptions($("seStart"),"10:00"); timeOptions($("seEnd"),"11:00"); $("seResult").innerHTML=""; show("seView"); }
+function openSearch(){ $("seDate").value=ymd(S.date); $("seStart").value="10:00"; $("seEnd").value="11:00"; $("seResult").innerHTML=""; show("seView"); }
 async function runSearch(){
   const date=$("seDate").value, st=$("seStart").value, et=$("seEnd").value; const out=$("seResult");
+  if(!date||!st||!et){ out.innerHTML=`<div class="hint">日付・時間を入力してください</div>`; return; }
   const [y,mo,da]=date.split("-").map(Number); const [sh,sm]=st.split(":").map(Number); const [eh,em]=et.split(":").map(Number);
   const starts=atLocal(y,mo-1,da,sh,sm), ends=atLocal(y,mo-1,da,eh,em);
   if(ends<=starts){ out.innerHTML=`<div class="hint">終了は開始より後にしてください</div>`; return; }
