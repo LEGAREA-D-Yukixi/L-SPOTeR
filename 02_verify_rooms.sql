@@ -1,9 +1,9 @@
 -- =============================================================
--- 会議室予約システム  単体テスト (全仕様の総点検)
+-- 会議ブース予約システム  単体テスト (全仕様の総点検)
 -- 実行先: Supabase SQL Editor。ブロック全体を選択して一度に実行(1トランザクション)。
 -- begin...rollback 内なので本番データは一切残りません。
 -- 結果テーブルの result が全て OK / OK(...) なら合格。
--- ※ 先に 01_rooms_schema.sql を実行済みであること。
+-- ※ 先に 01_rooms_schema.sql と 03_booths_upgrade.sql を実行済みであること。
 -- =============================================================
 begin;
 create temp table _t(seq int, label text, result text) on commit drop;
@@ -17,11 +17,13 @@ do $$ begin
   else insert into _t values(1,'RLSが4テーブルで有効','NG'); end if;
 end $$;
 
-do $$ declare total int; lim int; begin
-  select count(*), count(*) filter (where bookable_start_time='10:00' and bookable_end_time='11:00')
-  into total, lim from public.rooms;
-  if total=10 and lim=4 then insert into _t values(2,'10室投入・4室が10-11制限','OK');
-  else insert into _t values(2,'10室投入・4室が10-11制限', format('NG (total=%s, limited=%s)', total, lim)); end if;
+do $$ declare total int; lim int; mj int; begin
+  select count(*),
+         count(*) filter (where bookable_start_time='10:00' and bookable_end_time='11:00'),
+         count(*) filter (where location='マリージョア')
+  into total, lim, mj from public.rooms;
+  if total>=13 and lim>=4 and mj>=4 then insert into _t values(2,'13ブース・4室が10-11制限・マリージョア','OK');
+  else insert into _t values(2,'13ブース・4室が10-11制限・マリージョア', format('NG (total=%s, limited=%s, マリージョア=%s)', total, lim, mj)); end if;
 end $$;
 
 do $$ begin
@@ -151,7 +153,7 @@ do $$ declare n int; begin
   if n=0 then insert into _t values(19,'他人の氏名は変更不可','OK'); else insert into _t values(19,'他人の氏名は変更不可','NG: 変更できた'); end if;
 end $$;
 
--- ===== 分単位の予約(追加仕様) =====
+-- ===== 分単位の予約(仕様) =====
 do $$ declare rid uuid; begin
   perform set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
   select id into rid from public.rooms where bookable_start_time is null order by sort_order offset 1 limit 1;
@@ -179,9 +181,9 @@ do $$ declare rid uuid; begin
   insert into _t values(22,'分単位でも枠超過は拒否','NG: 通ってしまった');
 exception when others then insert into _t values(22,'分単位でも枠超過は拒否','OK(正しく拒否)'); end $$;
 
--- ===== 利用集計(追加仕様) の下ごしらえ: 会議室10 に alice2件/bob1件 =====
+-- ===== 利用集計(仕様) の下ごしらえ: 未制限の最終ブースに alice2件/bob1件 =====
 do $$ declare rid uuid; begin
-  select id into rid from public.rooms where bookable_start_time is null order by sort_order desc limit 1; -- 会議室10
+  select id into rid from public.rooms where bookable_start_time is null order by sort_order desc limit 1;
   perform set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
   insert into public.bookings(room_id,user_id,starts_at,ends_at) values
    (rid,'11111111-1111-1111-1111-111111111111',(current_date+time '09:00') at time zone 'Asia/Tokyo',(current_date+time '09:30') at time zone 'Asia/Tokyo'),
@@ -191,7 +193,6 @@ do $$ declare rid uuid; begin
    (rid,'22222222-2222-2222-2222-222222222222',(current_date+time '17:00') at time zone 'Asia/Tokyo',(current_date+time '17:30') at time zone 'Asia/Tokyo');
 end $$;
 
--- 会議室別の利用集計: 会議室10 = 3件 / 2.0h
 do $$ declare rid uuid; c int; hrs numeric; begin
   perform set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
   select id into rid from public.rooms where bookable_start_time is null order by sort_order desc limit 1;
@@ -201,7 +202,6 @@ do $$ declare rid uuid; c int; hrs numeric; begin
   else insert into _t values(23,'会議室別の利用集計(件数・時間)', format('NG (件数=%s, 時間=%s)',c,hrs)); end if;
 end $$;
 
--- 利用者別の利用集計: 会議室10のalice = 2件 / 1.5h
 do $$ declare rid uuid; c int; hrs numeric; begin
   perform set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
   select id into rid from public.rooms where bookable_start_time is null order by sort_order desc limit 1;
@@ -211,7 +211,54 @@ do $$ declare rid uuid; c int; hrs numeric; begin
   else insert into _t values(24,'利用者別の利用集計(件数・時間)', format('NG (件数=%s, 時間=%s)',c,hrs)); end if;
 end $$;
 
+-- ===== 予約者名の自動格納・改名同期(仕様) =====
+do $$ declare rid uuid; nm text; begin
+  perform set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+  select id into rid from public.rooms where bookable_start_time is null order by sort_order offset 2 limit 1;
+  insert into public.bookings(room_id,user_id,title,starts_at,ends_at)
+  values (rid,'11111111-1111-1111-1111-111111111111','氏名自動',
+          (current_date+time '08:00') at time zone 'Asia/Tokyo',(current_date+time '08:30') at time zone 'Asia/Tokyo');
+  select organizer_name into nm from public.bookings where title='氏名自動';
+  if nm='アリス' then insert into _t values(25,'予約時に予約者名を自動格納','OK');
+  else insert into _t values(25,'予約時に予約者名を自動格納', 'NG: '||coalesce(nm,'(null)')); end if;
+end $$;
+
+do $$ declare nm text; begin
+  perform set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+  update public.profiles set display_name='アリス改' where id='11111111-1111-1111-1111-111111111111';
+  select organizer_name into nm from public.bookings where title='氏名自動';
+  if nm='アリス改' then insert into _t values(26,'改名で過去予約の予約者名も同期','OK');
+  else insert into _t values(26,'改名で過去予約の予約者名も同期', 'NG: '||coalesce(nm,'(null)')); end if;
+end $$;
+
+-- ===== 管理者による会議ブース 追加/改名(仕様) =====
+do $$ begin
+  perform set_config('request.jwt.claims','{"sub":"33333333-3333-3333-3333-333333333333","role":"authenticated"}', true);
+  insert into public.rooms(name,color,sort_order,is_active) values ('テスト追加ブース','#888888',99,true);
+  insert into _t values(27,'管理者は会議ブース追加可','OK');
+exception when others then insert into _t values(27,'管理者は会議ブース追加可','NG: '||sqlerrm); end $$;
+
+do $$ begin
+  perform set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+  insert into public.rooms(name,color,sort_order,is_active) values ('不正追加ブース','#888888',98,true);
+  insert into _t values(28,'一般は会議ブース追加不可','NG: 通ってしまった');
+exception when others then insert into _t values(28,'一般は会議ブース追加不可','OK(正しく拒否)'); end $$;
+
+do $$ declare n int; begin
+  perform set_config('request.jwt.claims','{"sub":"33333333-3333-3333-3333-333333333333","role":"authenticated"}', true);
+  update public.rooms set name='改称ブース' where sort_order=1;
+  get diagnostics n = row_count;
+  if n=1 then insert into _t values(29,'管理者は会議ブース改名可','OK'); else insert into _t values(29,'管理者は会議ブース改名可','NG: 更新0件'); end if;
+end $$;
+
+do $$ declare n int; begin
+  perform set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+  update public.rooms set name='不正改称' where sort_order=1;
+  get diagnostics n = row_count;
+  if n=0 then insert into _t values(30,'一般は会議ブース改名不可','OK'); else insert into _t values(30,'一般は会議ブース改名不可','NG: 更新できた'); end if;
+end $$;
+
 reset role;
 select seq, label, result from _t order by seq;
 rollback;
--- 期待: 全24項目が OK / OK(正しく拒否)
+-- 期待: 全30項目が OK / OK(正しく拒否)

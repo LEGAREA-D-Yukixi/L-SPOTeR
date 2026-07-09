@@ -3,94 +3,92 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>会議室予約</title>
+<title>会議ブース予約 | LEGAREA</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="config.js"></script>
 <style>
   :root{
-    --bg:#1c1c1e; --panel:#2c2c2e; --panel2:#3a3a3c; --line:#48484a;
-    --text:#f2f2f7; --muted:#9b9ba0; --accent:#3b82f6; --danger:#ff453a; --ok:#30d158;
-    --row-h:56px; --px-per-hour:80px; --gutter:150px;
-    --start-hour:7; --end-hour:23;
+    --bg:#111a33; --bg2:#0e1730; --panel:#1a2748; --panel2:#243359; --line:#31406e;
+    --text:#eef2fb; --muted:#93a2cc; --accent:#ee5340; --accent-d:#d8402f;
+    --ok:#37d288; --danger:#ff5b57;
+    --row-h:56px; --px-per-hour:80px; --gutter:158px; --start-hour:7; --end-hour:23;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
-  body{background:var(--bg);color:var(--text);
+  body{background:linear-gradient(160deg,#16224a 0%,#111a33 55%,#0e1730 100%);color:var(--text);
     font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP","Segoe UI",sans-serif;
     font-size:14px;-webkit-font-smoothing:antialiased}
   button{font-family:inherit;cursor:pointer}
   .hidden{display:none!important}
-
-  /* ===== Auth ===== */
+  .lockup{display:inline-flex;align-items:center;gap:9px}
+  .mark{width:24px;height:24px;border-radius:6px;background:#fff;position:relative;flex:none;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+  .mark::before{content:"";position:absolute;inset:5px;background:var(--accent);border-radius:2px;transform:rotate(45deg)}
+  .wm{font-weight:800;letter-spacing:2px;font-size:15px;color:#fff}
+  .pill{display:inline-block;border:1px solid rgba(255,255,255,.34);color:#fff;border-radius:6px;padding:3px 11px;font-size:11px;letter-spacing:2px;font-weight:600}
   .auth-wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
-  .auth-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:28px;width:100%;max-width:380px}
-  .auth-card h1{font-size:20px;margin:0 0 4px}
+  .auth-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:30px;width:100%;max-width:390px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+  .auth-card h1{font-size:23px;margin:16px 0 8px;color:var(--accent);font-weight:800}
   .auth-card p.sub{color:var(--muted);margin:0 0 20px;font-size:13px}
   .tabs{display:flex;gap:6px;margin-bottom:18px;background:var(--bg);padding:4px;border-radius:10px}
-  .tabs button{flex:1;border:0;background:transparent;color:var(--muted);padding:8px;border-radius:7px;font-size:13px}
+  .tabs button{flex:1;border:0;background:transparent;color:var(--muted);padding:9px;border-radius:7px;font-size:13px}
   .tabs button.on{background:var(--panel2);color:var(--text)}
   label.fld{display:block;margin-bottom:14px}
   label.fld span{display:block;color:var(--muted);font-size:12px;margin-bottom:6px}
-  input,select{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);
-    border-radius:9px;padding:10px 12px;font-size:14px}
+  input,select{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:10px 12px;font-size:14px}
   input:focus,select:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
-  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:9px;
-    padding:10px 14px;font-size:14px;background:var(--accent);color:#fff;font-weight:600}
+  .ro{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px 12px;color:var(--muted)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:9px;padding:10px 14px;font-size:14px;background:var(--accent);color:#fff;font-weight:700}
+  .btn:hover{background:var(--accent-d)}
   .btn.block{width:100%}
-  .btn.ghost{background:var(--panel2);color:var(--text)}
-  .btn.danger{background:var(--danger);color:#fff}
+  .btn.ghost{background:var(--panel2);color:var(--text);font-weight:600}
+  .btn.ghost:hover{background:#2b3c66}
+  .btn.danger{background:transparent;color:var(--danger);border:1px solid var(--danger);font-weight:600}
+  .btn.danger:hover{background:rgba(255,91,87,.12)}
+  .btn.sm{padding:7px 10px;font-size:12px}
   .btn:disabled{opacity:.5;cursor:default}
   .msg{font-size:13px;margin-top:12px;min-height:18px}
   .msg.err{color:var(--danger)} .msg.ok{color:var(--ok)}
-
-  /* ===== App shell ===== */
-  .topbar{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--panel);
-    border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;flex-wrap:wrap}
-  .topbar .brand{font-weight:700;font-size:16px;margin-right:4px}
+  .topbar{display:flex;align-items:center;gap:12px;padding:10px 16px;background:rgba(16,23,48,.92);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;flex-wrap:wrap;backdrop-filter:blur(6px)}
+  .topbar .apptitle{font-weight:800;font-size:15px;color:#fff;margin-left:2px}
+  .topbar .apptitle b{color:var(--accent)}
   .nav{display:flex;align-items:center;gap:4px}
-  .nav button,.seg button,.icon-btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);
-    border-radius:8px;padding:7px 11px;font-size:13px}
-  .nav .date{min-width:150px;text-align:center;color:var(--text)}
+  .nav button,.seg button,.icon-btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:7px 11px;font-size:13px}
+  .nav button:hover,.icon-btn:hover{background:#2b3c66}
+  .nav .date{min-width:152px;text-align:center;color:var(--text)}
   .seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:8px;overflow:hidden}
   .seg button{border:0;border-radius:0;background:transparent;color:var(--muted)}
   .seg button.on{background:var(--accent);color:#fff}
+  .settings-btn{font-size:20px;line-height:1;padding:5px 12px}
   .spacer{flex:1}
   .who{color:var(--muted);font-size:12px;margin-right:2px}
-
-  /* ===== Day grid (rooms x time) ===== */
-  .gridscroll{overflow:auto;height:calc(100vh - 56px)}
-  .timehead{display:flex;position:sticky;top:0;background:var(--panel);z-index:10;border-bottom:1px solid var(--line)}
-  .timehead .corner{min-width:var(--gutter);width:var(--gutter);flex:none;position:sticky;left:0;background:var(--panel);
-    border-right:1px solid var(--line);z-index:11}
+  .gridscroll{overflow:auto;height:calc(100vh - 58px)}
+  .timehead{display:flex;position:sticky;top:0;background:var(--bg2);z-index:10;border-bottom:1px solid var(--line)}
+  .timehead .corner{min-width:var(--gutter);width:var(--gutter);flex:none;position:sticky;left:0;background:var(--bg2);border-right:1px solid var(--line);z-index:11}
   .hours{display:flex}
   .hcell{width:var(--px-per-hour);flex:none;font-size:11px;color:var(--muted);padding:8px 0 8px 6px;border-left:1px solid var(--line)}
   .room-row{display:flex;border-bottom:1px solid var(--line)}
-  .room-name{min-width:var(--gutter);width:var(--gutter);flex:none;position:sticky;left:0;background:var(--panel);
-    border-right:1px solid var(--line);padding:8px 10px;z-index:5;display:flex;flex-direction:column;justify-content:center;line-height:1.3}
+  .room-name{min-width:var(--gutter);width:var(--gutter);flex:none;position:sticky;left:0;background:var(--bg2);border-right:1px solid var(--line);padding:8px 10px;z-index:5;display:flex;flex-direction:column;justify-content:center;line-height:1.3}
   .room-name b{font-size:13px} .room-name small{color:var(--muted);font-size:11px}
-  .track{position:relative;height:var(--row-h)}
+  .room-name .loc{color:#c7b48a;font-size:10px}
+  .track{position:relative;height:var(--row-h);touch-action:pan-x pan-y}
   .track .slot{position:absolute;top:0;height:100%;border-left:1px solid var(--line)}
   .track:hover{background:rgba(255,255,255,.02)}
-  .nowline{position:absolute;top:0;height:100%;width:2px;background:var(--danger);z-index:6}
-  .ev{position:absolute;top:4px;height:calc(var(--row-h) - 8px);border-radius:6px;padding:3px 6px;overflow:hidden;
-    color:#fff;font-size:11px;line-height:1.25;cursor:pointer;border:1px solid rgba(0,0,0,.25)}
+  .selov{position:absolute;top:3px;bottom:3px;background:rgba(238,83,64,.32);border:1px solid var(--accent);border-radius:6px;pointer-events:none;z-index:4}
+  .nowline{position:absolute;top:0;height:100%;width:2px;background:var(--accent);z-index:6}
+  .ev{position:absolute;top:4px;height:calc(var(--row-h) - 8px);border-radius:6px;padding:3px 7px;overflow:hidden;color:#fff;font-size:11px;line-height:1.25;cursor:pointer;border:1px solid rgba(0,0,0,.25);z-index:3}
   .ev b{font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .ev span{opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
-
-  /* ===== Week grid (one room, 7 days) ===== */
+  .ev span{opacity:.92;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
   .week{display:grid;grid-template-columns:56px repeat(7,1fr);min-width:760px}
-  .week .wh{position:sticky;top:0;background:var(--panel);border-bottom:1px solid var(--line);padding:8px 4px;text-align:center;font-size:12px;z-index:10}
+  .week .wh{position:sticky;top:0;background:var(--bg2);border-bottom:1px solid var(--line);padding:8px 4px;text-align:center;font-size:12px;z-index:10}
   .week .wh.today{color:var(--accent);font-weight:700}
   .week .tlabel{font-size:11px;color:var(--muted);text-align:right;padding:2px 6px 0 0;border-top:1px solid var(--line)}
   .week .daycol{position:relative;border-left:1px solid var(--line)}
   .week .hourcell{height:48px;border-top:1px solid var(--line)}
   .week .ev{font-size:10px}
-
-  /* ===== Modal ===== */
-  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;
-    padding:20px;z-index:50}
-  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;width:100%;max-width:440px;max-height:90vh;overflow:auto}
-  .modal h2{margin:0 0 16px;font-size:17px}
+  .overlay{position:fixed;inset:0;background:rgba(6,10,24,.62);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;width:100%;max-width:440px;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+  .modal h2{margin:0 0 16px;font-size:18px}
+  .modal h2 .accent{color:var(--accent)}
   .row2{display:flex;gap:10px}.row2>*{flex:1}
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .chip{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:3px 8px;font-size:12px;display:flex;align-items:center;gap:6px}
@@ -100,9 +98,9 @@
   .list{display:flex;flex-direction:column;gap:8px;margin-top:6px}
   .list .item{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px}
   .list .item small{color:var(--muted)}
-  .closex{float:right;background:transparent;border:0;color:var(--muted);font-size:20px;line-height:1;margin:-6px -6px 0 0}
+  .closex{float:right;background:transparent;border:0;color:var(--muted);font-size:22px;line-height:1;margin:-8px -8px 0 0}
   .rp-kpi{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin:6px 0 4px}
-  .rp-kpi b{font-size:16px}
+  .rp-kpi b{font-size:16px;color:var(--accent)}
   .rp-h{font-size:13px;color:var(--muted);margin:16px 0 8px;font-weight:600}
   .rp-row{display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12px}
   .rp-k{width:120px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -112,16 +110,25 @@
   .rp-t{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}
   .rp-t th,.rp-t td{border-bottom:1px solid var(--line);padding:6px 8px}
   .rp-t th{color:var(--muted);font-weight:600;text-align:left}
+  .place-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+  .place-card{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px}
+  .place-card b{display:block;font-size:13px} .place-card small{color:#c7b48a;font-size:10px}
+  .sys-row{display:grid;grid-template-columns:1.2fr 1fr auto auto;gap:8px;align-items:center;margin-bottom:8px}
+  .sys-row input{padding:8px 10px}
+  .sys-lim{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);white-space:nowrap}
+  .sys-lim input{width:auto}
+  .sys-add{border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
   @media (prefers-reduced-motion: no-preference){.ev{transition:filter .12s}.ev:hover{filter:brightness(1.12)}}
-  @media (max-width:600px){:root{--gutter:110px;--px-per-hour:64px}.topbar{gap:8px}}
+  @media (max-width:600px){:root{--gutter:116px;--px-per-hour:64px}.topbar{gap:8px}.sys-row{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
 
-<!-- ============ AUTH ============ -->
 <div id="authView" class="auth-wrap hidden">
   <div class="auth-card">
-    <h1>会議室予約</h1>
+    <div class="lockup"><span class="mark"></span><span class="wm">LEGAREA</span></div>
+    <h1>会議ブース予約</h1>
+    <p class="sub"><span class="pill">MEETING BOOTH</span></p>
     <p class="sub">社内メンバー専用。@legarea.jp のアカウントでご利用ください。</p>
     <div class="tabs">
       <button id="tabLogin" class="on" onclick="setAuthTab('login')">ログイン</button>
@@ -134,21 +141,20 @@
   </div>
 </div>
 
-<!-- ============ NAME PROMPT (first login) ============ -->
 <div id="nameView" class="overlay hidden">
   <div class="modal" style="max-width:380px">
     <h2>お名前を入力してください</h2>
-    <p class="hint" style="margin-bottom:14px">予約の表示名になります。あとで設定から変更できます。</p>
+    <p class="hint" style="margin-bottom:14px">予約の予約者名になります。あとで設定から変更できます。</p>
     <label class="fld"><span>氏名</span><input id="nmInput" type="text" placeholder="山田太郎"></label>
     <button class="btn block" onclick="saveName()">はじめる</button>
     <div id="nmMsg" class="msg"></div>
   </div>
 </div>
 
-<!-- ============ APP ============ -->
 <div id="appView" class="hidden">
   <div class="topbar">
-    <span class="brand">会議室予約</span>
+    <div class="lockup"><span class="mark"></span><span class="wm">LEGAREA</span></div>
+    <span class="apptitle">会議<b>ブース</b>予約</span>
     <div class="nav">
       <button onclick="shiftDate(-1)" aria-label="前へ">‹</button>
       <button onclick="goToday()">今日</button>
@@ -159,23 +165,23 @@
       <button id="segDay" class="on" onclick="setView('day')">日</button>
       <button id="segWeek" onclick="setView('week')">週</button>
     </div>
+    <button class="icon-btn" onclick="openPlace()">会議ブース場所</button>
     <select id="weekRoom" class="hidden" style="width:auto" onchange="reload()"></select>
     <div class="spacer"></div>
-    <button class="icon-btn" onclick="openSearch()">空き検索</button>
+    <button id="btnReport" class="icon-btn hidden" onclick="openReport()">利用状況</button>
     <button class="icon-btn" onclick="openMine()">自分の予約</button>
-    <button class="icon-btn" onclick="openReport()">利用状況</button>
     <span class="who" id="whoLabel"></span>
-    <button class="icon-btn" onclick="openSettings()" aria-label="設定">⚙</button>
+    <button class="icon-btn settings-btn" onclick="openSettings()" aria-label="設定">⚙</button>
   </div>
   <div id="gridscroll" class="gridscroll"></div>
 </div>
 
-<!-- ============ BOOKING MODAL ============ -->
 <div id="bkView" class="overlay hidden">
   <div class="modal">
     <button class="closex" onclick="closeModal('bkView')" aria-label="閉じる">×</button>
     <h2 id="bkTitle">予約</h2>
-    <label class="fld"><span>会議室</span><select id="bkRoom" onchange="bkRoomHint()"></select></label>
+    <label class="fld"><span>予約者</span><div class="ro" id="bkOrganizer"></div></label>
+    <label class="fld"><span>会議ブース</span><select id="bkRoom" onchange="bkRoomHint()"></select></label>
     <div id="bkHint" class="hint"></div>
     <label class="fld"><span>日付</span><input id="bkDate" type="date"></label>
     <div class="row2">
@@ -197,11 +203,10 @@
   </div>
 </div>
 
-<!-- ============ SEARCH MODAL ============ -->
 <div id="seView" class="overlay hidden">
   <div class="modal">
     <button class="closex" onclick="closeModal('seView')" aria-label="閉じる">×</button>
-    <h2>空き会議室を探す</h2>
+    <h2>空き会議ブースを探す</h2>
     <label class="fld"><span>日付</span><input id="seDate" type="date"></label>
     <div class="row2">
       <label class="fld"><span>開始</span><input id="seStart" type="time" step="60"></label>
@@ -212,7 +217,6 @@
   </div>
 </div>
 
-<!-- ============ MY BOOKINGS MODAL ============ -->
 <div id="myView" class="overlay hidden">
   <div class="modal">
     <button class="closex" onclick="closeModal('myView')" aria-label="閉じる">×</button>
@@ -221,7 +225,6 @@
   </div>
 </div>
 
-<!-- ============ REPORT MODAL ============ -->
 <div id="rpView" class="overlay hidden">
   <div class="modal" style="max-width:560px">
     <button class="closex" onclick="closeModal('rpView')" aria-label="閉じる">×</button>
@@ -235,7 +238,34 @@
   </div>
 </div>
 
-<!-- ============ SETTINGS MODAL ============ -->
+<div id="placeView" class="overlay hidden">
+  <div class="modal" style="max-width:600px">
+    <button class="closex" onclick="closeModal('placeView')" aria-label="閉じる">×</button>
+    <h2>会議ブース場所</h2>
+    <div id="placeOut"></div>
+  </div>
+</div>
+
+<div id="sysView" class="overlay hidden">
+  <div class="modal" style="max-width:620px">
+    <button class="closex" onclick="closeModal('sysView')" aria-label="閉じる">×</button>
+    <h2><span class="accent">システム設定</span>（管理者）</h2>
+    <p class="hint" style="margin-bottom:10px">会議ブースの名称・場所・時間帯制限の変更、および新規追加ができます。</p>
+    <div id="sysList"></div>
+    <div class="sys-add">
+      <div class="rp-h" style="margin-top:0">会議ブースを追加</div>
+      <div class="sys-row">
+        <input id="sysAddName" type="text" placeholder="名称 (例: 会議ブース⑭)">
+        <input id="sysAddLoc" type="text" placeholder="場所(任意)">
+        <label class="sys-lim"><input id="sysAddLimited" type="checkbox"> 10-11制限</label>
+        <button class="btn sm" onclick="addRoom()">追加</button>
+      </div>
+    </div>
+    <div id="sysMsg" class="msg"></div>
+    <div class="hint" style="margin-top:12px;padding:10px;border:1px dashed var(--line);border-radius:8px">会議ブース場所のレイアウト編集は、共有いただくレイアウト画像をもとに追加実装します。</div>
+  </div>
+</div>
+
 <div id="stView" class="overlay hidden">
   <div class="modal" style="max-width:380px">
     <button class="closex" onclick="closeModal('stView')" aria-label="閉じる">×</button>
@@ -243,7 +273,8 @@
     <label class="fld"><span>氏名（表示名）</span><input id="stName" type="text"></label>
     <button class="btn" onclick="saveName(true)">氏名を保存</button>
     <div id="stMsg" class="msg"></div>
-    <hr style="border:0;border-top:1px solid var(--line);margin:20px 0">
+    <button id="btnSys" class="btn ghost block hidden" style="margin-top:14px" onclick="closeModal('stView');openSys()">システム設定</button>
+    <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
     <button class="btn ghost block" onclick="logout()">ログアウト</button>
   </div>
 </div>
@@ -253,10 +284,10 @@
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.APP_CONFIG || {};
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const DOMAIN = "@legarea.jp";
-const START_H = 7, END_H = 23, SLOT = 30, PX_H = 80;
+const START_H = 7, END_H = 23, SNAP = 15, CLICK_DUR = 30, PX_H = 80;
 const S = { user:null, profile:null, rooms:[], bookings:[], view:"day", date:new Date(), authTab:"login", names:[], editId:null, chips:[] };
+let drag=null;
 
-/* ---------- helpers ---------- */
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -264,17 +295,19 @@ const hm = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 function atLocal(y,mo,da,h,mi){ return new Date(y,mo,da,h,mi,0,0); }
 function dayStart(d){ return atLocal(d.getFullYear(),d.getMonth(),d.getDate(),0,0); }
 function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
-function weekStart(d){ const x=dayStart(d); x.setDate(x.getDate()-x.getDay()); return x; } // Sunday start
+function weekStart(d){ const x=dayStart(d); x.setDate(x.getDate()-x.getDay()); return x; }
 function fmtDateJP(d){ const w=["日","月","火","水","木","金","土"][d.getDay()]; return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日(${w})`; }
 function minsFrom7(d){ return (d.getHours()-START_H)*60 + d.getMinutes(); }
+function snap(m){ return Math.max(0, Math.min(Math.round(m/SNAP)*SNAP, (END_H-START_H)*60)); }
+function toHM(m){ return `${pad(START_H+Math.floor(m/60))}:${pad(m%60)}`; }
 function show(id){ $(id).classList.remove("hidden"); }
 function hide(id){ $(id).classList.add("hidden"); }
 function closeModal(id){ hide(id); }
 function roomById(id){ return S.rooms.find(r=>r.id===id); }
 function isLimited(r){ return r && r.bookable_start_time && r.bookable_end_time; }
 function hhmmShort(t){ return t? t.slice(0,5):""; }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
-/* ---------- auth ---------- */
 function setAuthTab(t){ S.authTab=t;
   $("tabLogin").classList.toggle("on",t==="login"); $("tabSignup").classList.toggle("on",t==="signup");
   $("auBtn").textContent = t==="login"?"ログイン":"新規登録";
@@ -290,20 +323,14 @@ async function submitAuth(){
     if(S.authTab==="signup"){
       if(!email.endsWith(DOMAIN)){ throw new Error(`${DOMAIN} のメールアドレスのみ登録できます`); }
       if(pass.length<6){ throw new Error("パスワードは6文字以上にしてください"); }
-      const { error } = await sb.auth.signUp({ email, password:pass });
-      if(error) throw error;
+      const { error } = await sb.auth.signUp({ email, password:pass }); if(error) throw error;
     }else{
-      const { error } = await sb.auth.signInWithPassword({ email, password:pass });
-      if(error) throw error;
+      const { error } = await sb.auth.signInWithPassword({ email, password:pass }); if(error) throw error;
     }
-    // onAuthStateChange が後続処理を行う
-  }catch(e){
-    msg.className="msg err";
-    msg.textContent = mapAuthError(e.message);
-  }finally{ $("auBtn").disabled=false; }
+  }catch(e){ msg.className="msg err"; msg.textContent = mapAuthError(e.message); }
+  finally{ $("auBtn").disabled=false; }
 }
-function mapAuthError(m){
-  m=m||"";
+function mapAuthError(m){ m=m||"";
   if(/already registered|already been registered|User already/i.test(m)) return "このメールアドレスは登録済みです。ログインしてください。";
   if(/Invalid login credentials/i.test(m)) return "メールアドレスまたはパスワードが違います。";
   if(/legarea\.jp/.test(m)) return "legarea.jp のメールアドレスのみ登録できます。";
@@ -313,55 +340,46 @@ function mapAuthError(m){
 }
 async function logout(){ await sb.auth.signOut(); location.reload(); }
 
-/* ---------- profile / routing ---------- */
 async function loadProfile(){
   const { data } = await sb.from("profiles").select("id,display_name,is_admin").eq("id",S.user.id).maybeSingle();
-  if(!data){ // 念のため(トリガー未作成時のフォールバック)
-    await sb.from("profiles").insert({ id:S.user.id });
-    S.profile = { id:S.user.id, display_name:null, is_admin:false };
-  }else S.profile=data;
+  if(!data){ await sb.from("profiles").insert({ id:S.user.id }); S.profile={ id:S.user.id, display_name:null, is_admin:false }; }
+  else S.profile=data;
 }
 async function route(){
   hide("authView");
   if(!S.profile.display_name){ show("nameView"); $("nmInput").focus(); return; }
   hide("nameView"); show("appView");
   $("whoLabel").textContent = S.profile.display_name + (S.profile.is_admin?"（管理者）":"");
+  $("btnReport").classList.toggle("hidden", !S.profile.is_admin);
+  $("btnSys").classList.toggle("hidden", !S.profile.is_admin);
   await loadRooms(); buildWeekRoomSelect(); await reload(); subscribeRealtime();
 }
 async function saveName(fromSettings){
-  const inp = fromSettings? $("stName"):$("nmInput");
-  const name = inp.value.trim();
+  const inp = fromSettings? $("stName"):$("nmInput"); const name = inp.value.trim();
   const msg = fromSettings? $("stMsg"):$("nmMsg"); msg.className="msg";
   if(!name){ msg.className="msg err"; msg.textContent="氏名を入力してください"; return; }
   const { error } = await sb.from("profiles").update({ display_name:name }).eq("id",S.user.id);
   if(error){ msg.className="msg err"; msg.textContent="保存に失敗しました: "+error.message; return; }
   S.profile.display_name=name;
-  if(fromSettings){ msg.className="msg ok"; msg.textContent="保存しました"; $("whoLabel").textContent=name+(S.profile.is_admin?"（管理者）":""); await reload(); }
+  if(fromSettings){ msg.className="msg ok"; msg.textContent="保存しました（過去予約の予約者名も更新されます）"; $("whoLabel").textContent=name+(S.profile.is_admin?"（管理者）":""); await reload(); }
   else route();
 }
 
-/* ---------- data ---------- */
 async function loadRooms(){
-  const { data } = await sb.from("rooms").select("*").order("sort_order");
+  const { data } = await sb.from("rooms").select("*").eq("is_active",true).order("sort_order");
   S.rooms = data||[];
   const { data:p } = await sb.from("profiles").select("display_name");
   S.names = [...new Set((p||[]).map(x=>x.display_name).filter(Boolean))];
 }
-function viewRange(){
-  if(S.view==="day"){ const s=dayStart(S.date); return [s, addDays(s,1)]; }
-  const s=weekStart(S.date); return [s, addDays(s,7)];
-}
+function viewRange(){ if(S.view==="day"){ const s=dayStart(S.date); return [s, addDays(s,1)]; } const s=weekStart(S.date); return [s, addDays(s,7)]; }
 async function loadBookings(){
   const [a,b]=viewRange();
-  let q = sb.from("bookings").select("*, profiles(display_name)")
-    .lt("starts_at", b.toISOString()).gt("ends_at", a.toISOString()).order("starts_at");
+  let q = sb.from("bookings").select("*").lt("starts_at", b.toISOString()).gt("ends_at", a.toISOString()).order("starts_at");
   if(S.view==="week"){ const rid=$("weekRoom").value; if(rid) q=q.eq("room_id",rid); }
-  const { data } = await q;
-  S.bookings = data||[];
+  const { data } = await q; S.bookings = data||[];
 }
 async function reload(){ await loadBookings(); render(); }
 
-/* ---------- render ---------- */
 function render(){
   $("dateLabel").textContent = S.view==="day"? fmtDateJP(S.date)
     : (()=>{ const s=weekStart(S.date),e=addDays(s,6); return `${s.getMonth()+1}/${s.getDate()} - ${e.getMonth()+1}/${e.getDate()}`; })();
@@ -375,29 +393,22 @@ function renderDay(){
   h+=`</div></div>`;
   const trackW = hours*PX_H;
   for(const r of S.rooms){
-    h+=`<div class="room-row"><div class="room-name"><b>${esc(r.name)}</b>${isLimited(r)?`<small>${hhmmShort(r.bookable_start_time)}〜${hhmmShort(r.bookable_end_time)}のみ</small>`:""}</div>`;
+    h+=`<div class="room-row"><div class="room-name"><b>${esc(r.name)}</b>`
+      +`${r.location?`<span class="loc">${esc(r.location)}</span>`:""}`
+      +`${isLimited(r)?`<small>${hhmmShort(r.bookable_start_time)}〜${hhmmShort(r.bookable_end_time)}のみ</small>`:""}</div>`;
     h+=`<div class="track" style="width:${trackW}px" data-room="${r.id}">`;
     for(let i=0;i<hours;i++) h+=`<div class="slot" style="left:${i*PX_H}px;width:${PX_H}px"></div>`;
-    const today=ymd(new Date())===ymd(S.date);
-    if(today){ const nm=minsFrom7(new Date()); if(nm>=0&&nm<=hours*60) h+=`<div class="nowline" style="left:${nm/60*PX_H}px"></div>`; }
+    if(ymd(new Date())===ymd(S.date)){ const nm=minsFrom7(new Date()); if(nm>=0&&nm<=hours*60) h+=`<div class="nowline" style="left:${nm/60*PX_H}px"></div>`; }
     for(const b of S.bookings.filter(x=>x.room_id===r.id)){
       const s=new Date(b.starts_at), e=new Date(b.ends_at);
       const left=Math.max(0,minsFrom7(s)/60*PX_H), width=Math.max(18,(e-s)/3600000*PX_H);
       h+=`<div class="ev" style="left:${left}px;width:${width}px;background:${r.color}" onclick="openBooking('${b.id}')">`
-        +`<b>${esc(b.title||"予約")}</b><span>${esc(b.profiles?.display_name||"")}</span></div>`;
+        +`<b>${esc(b.title||"予約")}</b><span>${esc(b.organizer_name||"")}</span></div>`;
     }
     h+=`</div></div>`;
   }
   host.innerHTML=h;
-  host.querySelectorAll(".track").forEach(t=>{
-    t.addEventListener("click",ev=>{
-      if(ev.target.closest(".ev"))return;           // 予約ブロック内のクリックは無視(編集はブロック側で処理)
-      const rect=t.getBoundingClientRect(); const x=ev.clientX-rect.left;
-      let mins=Math.round((x/PX_H*60)/SLOT)*SLOT; mins=Math.max(0,Math.min(mins,(END_H-START_H)*60-SLOT));
-      const h0=START_H+Math.floor(mins/60), m0=mins%60;
-      openBooking(null,{ room:t.dataset.room, date:ymd(S.date), start:`${pad(h0)}:${pad(m0)}` });
-    });
-  });
+  host.querySelectorAll(".track").forEach(t=> t.addEventListener("pointerdown", trackPointerDown));
 }
 function renderWeek(){
   const host=$("gridscroll"); const s=weekStart(S.date); const hours=END_H-START_H;
@@ -414,7 +425,7 @@ function renderWeek(){
       const bs=new Date(b.starts_at), be=new Date(b.ends_at);
       const top=minsFrom7(bs)/60*48, height=Math.max(16,(be-bs)/3600000*48);
       h+=`<div class="ev" style="top:${top}px;left:2px;right:2px;height:${height}px;position:absolute;background:${r?r.color:"#3b82f6"}" onclick="openBooking('${b.id}')">`
-        +`<b>${esc(b.title||"予約")}</b><span>${esc(b.profiles?.display_name||"")}</span></div>`;
+        +`<b>${esc(b.title||"予約")}</b><span>${esc(b.organizer_name||"")}</span></div>`;
     }
     h+=`</div>`;
   }
@@ -422,23 +433,38 @@ function renderWeek(){
   host.innerHTML=h;
   host.querySelectorAll(".daycol").forEach(col=>{
     col.addEventListener("click",ev=>{
-      if(ev.target.closest(".ev"))return;           // 予約ブロック内のクリックは無視
+      if(ev.target.closest(".ev"))return;
       const rect=col.getBoundingClientRect(); const y=ev.clientY-rect.top;
-      let mins=Math.round((y/48*60)/SLOT)*SLOT; mins=Math.max(0,Math.min(mins,(END_H-START_H)*60-SLOT));
-      const h0=START_H+Math.floor(mins/60), m0=mins%60;
-      openBooking(null,{ room:rid, date:col.dataset.date, start:`${pad(h0)}:${pad(m0)}` });
+      const mins=snap(y/48*60); openBooking(null,{ room:rid, date:col.dataset.date, start:toHM(mins), end:toHM(Math.min(mins+CLICK_DUR,(END_H-START_H)*60)) });
     });
   });
 }
-function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
-/* ---------- nav / view ---------- */
+function xToMins(track, clientX){ const r=track.getBoundingClientRect(); return (clientX-r.left)/PX_H*60; }
+function positionOv(){ if(!drag||!drag.ov) return; const b=(drag.b==null?drag.a:drag.b); const lo=Math.min(drag.a,b), hi=Math.max(drag.a,b);
+  drag.ov.style.left=(lo/60*PX_H)+"px"; drag.ov.style.width=Math.max(2,(hi-lo)/60*PX_H)+"px"; }
+function trackPointerDown(e){
+  if(e.target.closest(".ev")) return;
+  const track=e.currentTarget;
+  drag={ track, roomId:track.dataset.room, a:snap(xToMins(track,e.clientX)), b:null, mouse:(e.pointerType==="mouse"), moved:false, ov:null };
+  if(drag.mouse){ e.preventDefault(); drag.ov=document.createElement("div"); drag.ov.className="selov"; track.appendChild(drag.ov); positionOv();
+    try{ track.setPointerCapture(e.pointerId); }catch(_){} }
+}
+function onPointerMove(e){ if(!drag) return; if(drag.mouse){ drag.b=snap(xToMins(drag.track,e.clientX)); drag.moved=true; positionOv(); } else { drag.moved=true; } }
+function onPointerUp(){ if(!drag) return; const d=drag; drag=null;
+  if(d.ov&&d.ov.parentNode) d.ov.parentNode.removeChild(d.ov);
+  if(!d.mouse && d.moved) return;
+  const b=(d.b==null?d.a:d.b); let lo=Math.min(d.a,b), hi=Math.max(d.a,b);
+  if(hi-lo < SNAP) hi = Math.min(lo+CLICK_DUR,(END_H-START_H)*60);
+  openBooking(null,{ room:d.roomId, date:ymd(S.date), start:toHM(lo), end:toHM(hi) });
+}
+function onPointerCancel(){ if(drag){ if(drag.ov&&drag.ov.parentNode) drag.ov.parentNode.removeChild(drag.ov); drag=null; } }
+
 function shiftDate(n){ S.date = addDays(S.date, S.view==="day"?n:n*7); reload(); }
 function goToday(){ S.date=new Date(); reload(); }
 function setView(v){ S.view=v; $("segDay").classList.toggle("on",v==="day"); $("segWeek").classList.toggle("on",v==="week"); reload(); }
 function buildWeekRoomSelect(){ const sel=$("weekRoom"); sel.innerHTML=S.rooms.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join(""); }
 
-/* ---------- booking modal ---------- */
 function openBooking(id, prefill){
   S.editId=id; S.chips=[]; const msg=$("bkMsg"); msg.className="msg"; msg.textContent="";
   $("bkRoom").innerHTML=S.rooms.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join("");
@@ -449,6 +475,7 @@ function openBooking(id, prefill){
     const b=S.bookings.find(x=>x.id===id); if(!b)return;
     const own = b.user_id===S.user.id, canEdit=own, canDelete=own||S.profile.is_admin;
     $("bkTitle").textContent = canEdit?"予約を編集":"予約の詳細";
+    $("bkOrganizer").textContent = b.organizer_name || "";
     $("bkRoom").value=b.room_id; $("bkDate").value=ymd(new Date(b.starts_at));
     $("bkStart").value=hm(new Date(b.starts_at)); $("bkEnd").value=hm(new Date(b.ends_at));
     $("bkSubject").value=b.title||""; S.chips=[...(b.participants||[])];
@@ -457,18 +484,19 @@ function openBooking(id, prefill){
     $("bkDelete").classList.toggle("hidden",!canDelete);
   }else{
     $("bkTitle").textContent="新規予約"; $("bkSubject").value="";
+    $("bkOrganizer").textContent = S.profile.display_name || "";
     [$("bkRoom"),$("bkDate"),$("bkStart"),$("bkEnd"),$("bkSubject"),$("bkPartInput")].forEach(el=>el.disabled=false);
     $("bkSave").classList.remove("hidden");
     if(prefill){ $("bkRoom").value=prefill.room; $("bkDate").value=prefill.date;
       $("bkStart").value=prefill.start;
-      const [ph,pm]=prefill.start.split(":").map(Number); let em=Math.min(ph*60+pm+SLOT, END_H*60);
-      $("bkEnd").value=`${pad(Math.floor(em/60))}:${pad(em%60)}`; }
-    else { $("bkDate").value=ymd(S.date); }
+      if(prefill.end){ $("bkEnd").value=prefill.end; }
+      else { const [ph,pm]=prefill.start.split(":").map(Number); let em=Math.min(ph*60+pm+CLICK_DUR, END_H*60); $("bkEnd").value=`${pad(Math.floor(em/60))}:${pad(em%60)}`; }
+    } else { $("bkDate").value=ymd(S.date); }
   }
   $("bkPartInput").value=""; renderChips(); bkRoomHint(); show("bkView");
 }
 function bkRoomHint(){ const r=roomById($("bkRoom").value);
-  $("bkHint").textContent = isLimited(r)? `この会議室は ${hhmmShort(r.bookable_start_time)}〜${hhmmShort(r.bookable_end_time)} のみ予約できます`:""; }
+  $("bkHint").textContent = isLimited(r)? `この会議ブースは ${hhmmShort(r.bookable_start_time)}〜${hhmmShort(r.bookable_end_time)} のみ予約できます`:""; }
 function renderChips(){ $("bkChips").innerHTML=S.chips.map((c,i)=>`<span class="chip">${esc(c)}<button onclick="rmChip(${i})" aria-label="削除">×</button></span>`).join(""); }
 function rmChip(i){ S.chips.splice(i,1); renderChips(); }
 $("bkPartInput").addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===","){ e.preventDefault(); const v=e.target.value.trim(); if(v&&!S.chips.includes(v)){ S.chips.push(v); renderChips(); } e.target.value=""; } });
@@ -476,7 +504,7 @@ $("bkPartInput").addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===","
 async function saveBooking(){
   const msg=$("bkMsg"); msg.className="msg"; msg.textContent="";
   const rid=$("bkRoom").value, date=$("bkDate").value, st=$("bkStart").value, et=$("bkEnd").value;
-  if(!rid||!date||!st||!et){ msg.className="msg err"; msg.textContent="会議室・日付・時間を入力してください"; return; }
+  if(!rid||!date||!st||!et){ msg.className="msg err"; msg.textContent="会議ブース・日付・時間を入力してください"; return; }
   const pend=$("bkPartInput").value.trim(); if(pend&&!S.chips.includes(pend)) S.chips.push(pend);
   const [y,mo,da]=date.split("-").map(Number); const [sh,sm]=st.split(":").map(Number); const [eh,em]=et.split(":").map(Number);
   const starts=atLocal(y,mo-1,da,sh,sm), ends=atLocal(y,mo-1,da,eh,em);
@@ -494,8 +522,7 @@ async function saveBooking(){
   }catch(e){ msg.className="msg err"; msg.textContent=mapBookingError(e); }
   finally{ $("bkSave").disabled=false; }
 }
-function mapBookingError(e){
-  const m=(e&&e.message)||""; const code=e&&e.code;
+function mapBookingError(e){ const m=(e&&e.message)||""; const code=e&&e.code;
   if(code==="23P01"||/no_overlap|exclusion|overlap/i.test(m)) return "この時間帯はすでに予約が入っています。";
   if(/予約可能|日をまたぐ/.test(m)) return m;
   if(/check constraint|ends_at/.test(m)) return "時間の指定が正しくありません。";
@@ -510,7 +537,6 @@ async function deleteBooking(){
   closeModal("bkView"); await reload();
 }
 
-/* ---------- search ---------- */
 function openSearch(){ $("seDate").value=ymd(S.date); $("seStart").value="10:00"; $("seEnd").value="11:00"; $("seResult").innerHTML=""; show("seView"); }
 async function runSearch(){
   const date=$("seDate").value, st=$("seStart").value, et=$("seEnd").value; const out=$("seResult");
@@ -518,74 +544,120 @@ async function runSearch(){
   const [y,mo,da]=date.split("-").map(Number); const [sh,sm]=st.split(":").map(Number); const [eh,em]=et.split(":").map(Number);
   const starts=atLocal(y,mo-1,da,sh,sm), ends=atLocal(y,mo-1,da,eh,em);
   if(ends<=starts){ out.innerHTML=`<div class="hint">終了は開始より後にしてください</div>`; return; }
-  const { data } = await sb.from("bookings").select("room_id,starts_at,ends_at")
-    .lt("starts_at",ends.toISOString()).gt("ends_at",starts.toISOString());
+  const { data } = await sb.from("bookings").select("room_id,starts_at,ends_at").lt("starts_at",ends.toISOString()).gt("ends_at",starts.toISOString());
   const busy=new Set((data||[]).map(b=>b.room_id));
-  const free=S.rooms.filter(r=>{
-    if(busy.has(r.id))return false;
-    if(isLimited(r)){ const ws=r.bookable_start_time.slice(0,5), we=r.bookable_end_time.slice(0,5);
-      if(st<ws||et>we) return false; }
-    return true;
-  });
-  out.innerHTML = free.length? free.map(r=>`<div class="item"><span><b>${esc(r.name)}</b>${isLimited(r)?` <small>${hhmmShort(r.bookable_start_time)}〜${hhmmShort(r.bookable_end_time)}</small>`:""}</span>`
-    +`<button class="btn" onclick='closeModal("seView");openBooking(null,${JSON.stringify({room:r.id,date,start:st}).replace(/'/g,"&#39;")})'>予約</button></div>`).join("")
-    : `<div class="hint">この時間に空いている会議室はありません。</div>`;
+  const free=S.rooms.filter(r=>{ if(busy.has(r.id))return false;
+    if(isLimited(r)){ const ws=r.bookable_start_time.slice(0,5), we=r.bookable_end_time.slice(0,5); if(st<ws||et>we) return false; } return true; });
+  out.innerHTML = free.length? free.map(r=>`<div class="item"><span><b>${esc(r.name)}</b>${r.location?` <small style="color:#c7b48a">${esc(r.location)}</small>`:""}${isLimited(r)?` <small>${hhmmShort(r.bookable_start_time)}〜${hhmmShort(r.bookable_end_time)}</small>`:""}</span>`
+    +`<button class="btn sm" onclick='closeModal("seView");openBooking(null,${JSON.stringify({room:r.id,date,start:st,end:et}).replace(/'/g,"&#39;")})'>予約</button></div>`).join("")
+    : `<div class="hint">この時間に空いている会議ブースはありません。</div>`;
 }
 
-/* ---------- my bookings ---------- */
 async function openMine(){
-  const { data } = await sb.from("bookings").select("*").eq("user_id",S.user.id)
-    .gte("ends_at", new Date().toISOString()).order("starts_at");
+  const { data } = await sb.from("bookings").select("*").eq("user_id",S.user.id).gte("ends_at", new Date().toISOString()).order("starts_at");
   const list=$("myList");
   list.innerHTML = (data&&data.length)? data.map(b=>{ const r=roomById(b.room_id); const s=new Date(b.starts_at),e=new Date(b.ends_at);
     return `<div class="item"><span><b>${esc(r?r.name:"")}</b><br><small>${fmtDateJP(s)} ${hm(s)}–${hm(e)}${b.title?" / "+esc(b.title):""}</small></span>`
-      +`<button class="btn ghost" onclick='closeModal("myView");jumpTo("${b.starts_at}");openBooking("${b.id}")'>編集</button></div>`;
+      +`<button class="btn ghost sm" onclick='closeModal("myView");jumpTo("${b.starts_at}");openBooking("${b.id}")'>編集</button></div>`;
   }).join("") : `<div class="hint">今後の予約はありません。</div>`;
   show("myView");
 }
 function jumpTo(iso){ S.date=new Date(iso); S.view="day"; setView("day"); }
 
-/* ---------- report (usage) ---------- */
-function openReport(){ const now=new Date(); const first=new Date(now.getFullYear(),now.getMonth(),1);
-  $("rpFrom").value=ymd(first); $("rpTo").value=ymd(now); $("rpOut").innerHTML=""; show("rpView"); runReport(); }
+async function openReport(){
+  if(!S.profile.is_admin) return;
+  const { data:mn } = await sb.from("bookings").select("starts_at").order("starts_at",{ascending:true}).limit(1);
+  const { data:mx } = await sb.from("bookings").select("ends_at").order("ends_at",{ascending:false}).limit(1);
+  const first = (mn&&mn[0])? new Date(mn[0].starts_at): new Date();
+  const last  = (mx&&mx[0])? new Date(mx[0].ends_at): new Date();
+  $("rpFrom").value=ymd(first); $("rpTo").value=ymd(last); $("rpOut").innerHTML=""; show("rpView"); runReport();
+}
 async function runReport(){
   const from=$("rpFrom").value, to=$("rpTo").value; const out=$("rpOut");
   if(!from||!to){ out.innerHTML=`<div class="hint">期間を指定してください</div>`; return; }
   const [fy,fm,fd]=from.split("-").map(Number); const [ty,tm,td]=to.split("-").map(Number);
   const start=atLocal(fy,fm-1,fd,0,0), end=addDays(atLocal(ty,tm-1,td,0,0),1);
   if(end<=start){ out.innerHTML=`<div class="hint">終了日は開始日以降にしてください</div>`; return; }
-  const { data } = await sb.from("bookings").select("room_id,user_id,starts_at,ends_at, profiles(display_name)")
-    .gte("starts_at", start.toISOString()).lt("starts_at", end.toISOString());
+  const { data } = await sb.from("bookings").select("room_id,user_id,starts_at,ends_at,organizer_name").gte("starts_at", start.toISOString()).lt("starts_at", end.toISOString());
   const rows=data||[];
   if(!rows.length){ out.innerHTML=`<div class="hint">この期間の予約はありません。</div>`; return; }
   const hrs=b=>(new Date(b.ends_at)-new Date(b.starts_at))/3600000;
   const totalCount=rows.length, totalHrs=rows.reduce((s,b)=>s+hrs(b),0);
   const byRoom={}, byUser={}, byUR={};
   for(const b of rows){
-    const rn=(roomById(b.room_id)||{}).name||"(不明)"; const un=b.profiles?.display_name||"(不明)";
+    const rn=(roomById(b.room_id)||{}).name||"(不明)"; const uid=b.user_id, un=b.organizer_name||"(未設定)";
     (byRoom[rn]=byRoom[rn]||{c:0,h:0}); byRoom[rn].c++; byRoom[rn].h+=hrs(b);
-    (byUser[un]=byUser[un]||{c:0,h:0}); byUser[un].c++; byUser[un].h+=hrs(b);
-    const k=un+" / "+rn; (byUR[k]=byUR[k]||{u:un,rn,c:0,h:0}); byUR[k].c++; byUR[k].h+=hrs(b);
+    (byUser[uid]=byUser[uid]||{name:un,c:0,h:0}); byUser[uid].name=un; byUser[uid].c++; byUser[uid].h+=hrs(b);
+    const k=uid+"|"+rn; (byUR[k]=byUR[k]||{u:un,rn,c:0,h:0}); byUR[k].u=un; byUR[k].c++; byUR[k].h+=hrs(b);
   }
-  const bars=obj=>{ const arr=Object.entries(obj).map(([k,v])=>({k,...v})).sort((a,b)=>b.h-a.h); const max=Math.max(...arr.map(x=>x.h),1);
-    return arr.map(x=>`<div class="rp-row"><div class="rp-k">${esc(x.k)}</div><div class="rp-bar"><div style="width:${(x.h/max*100).toFixed(1)}%"></div></div><div class="rp-v">${x.c}件 / ${x.h.toFixed(1)}h</div></div>`).join(""); };
+  const bars=arr=>{ arr=arr.slice().sort((a,b)=>b.h-a.h); const max=Math.max(...arr.map(x=>x.h),1);
+    return arr.map(x=>`<div class="rp-row"><div class="rp-k">${esc(x.label)}</div><div class="rp-bar"><div style="width:${(x.h/max*100).toFixed(1)}%"></div></div><div class="rp-v">${x.c}件 / ${x.h.toFixed(1)}h</div></div>`).join(""); };
+  const roomArr=Object.entries(byRoom).map(([k,v])=>({label:k,c:v.c,h:v.h}));
+  const userArr=Object.values(byUser).map(v=>({label:v.name,c:v.c,h:v.h}));
   const urRows=Object.values(byUR).sort((a,b)=>b.h-a.h).map(x=>`<tr><td>${esc(x.u)}</td><td>${esc(x.rn)}</td><td style="text-align:right">${x.c}</td><td style="text-align:right">${x.h.toFixed(1)}</td></tr>`).join("");
   out.innerHTML =
     `<div class="rp-kpi">合計 <b>${totalCount}</b> 件 ・ <b>${totalHrs.toFixed(1)}</b> 時間</div>`
-    +`<h3 class="rp-h">会議室別</h3>${bars(byRoom)}`
-    +`<h3 class="rp-h">利用者別</h3>${bars(byUser)}`
-    +`<h3 class="rp-h">利用者 × 会議室</h3><table class="rp-t"><thead><tr><th>利用者</th><th>会議室</th><th style="text-align:right">件数</th><th style="text-align:right">時間</th></tr></thead><tbody>${urRows}</tbody></table>`;
+    +`<h3 class="rp-h">会議ブース別</h3>${bars(roomArr)}`
+    +`<h3 class="rp-h">利用者別</h3>${bars(userArr)}`
+    +`<h3 class="rp-h">利用者 × 会議ブース</h3><table class="rp-t"><thead><tr><th>利用者</th><th>会議ブース</th><th style="text-align:right">件数</th><th style="text-align:right">時間</th></tr></thead><tbody>${urRows}</tbody></table>`;
 }
-/* ---------- settings ---------- */
-function openSettings(){ $("stName").value=S.profile.display_name||""; $("stMsg").textContent=""; show("stView"); }
 
-/* ---------- realtime ---------- */
+function openPlace(){
+  const groups={};
+  for(const r of S.rooms){ const loc=r.location||"（場所未設定）"; (groups[loc]=groups[loc]||[]).push(r); }
+  let h='<p class="hint" style="margin-bottom:12px">会議ブースの場所一覧です。マップ（レイアウト図）は共有いただく画像をもとに追加予定です。</p>';
+  for(const [loc,arr] of Object.entries(groups)){
+    h+=`<h3 class="rp-h">${esc(loc)}</h3><div class="place-grid">`;
+    h+=arr.map(r=>`<div class="place-card" style="border-left:4px solid ${r.color}"><b>${esc(r.name)}</b>${isLimited(r)?`<small>${hhmmShort(r.bookable_start_time)}〜${hhmmShort(r.bookable_end_time)}のみ</small>`:""}</div>`).join("");
+    h+=`</div>`;
+  }
+  $("placeOut").innerHTML=h; show("placeView");
+}
+
+function openSys(){ if(!S.profile.is_admin) return; renderSysList(); $("sysAddName").value=""; $("sysAddLoc").value=""; $("sysAddLimited").checked=false; $("sysMsg").textContent=""; show("sysView"); }
+function renderSysList(){
+  $("sysList").innerHTML = S.rooms.map(r=>`<div class="sys-row" data-id="${r.id}">
+    <input class="sys-name" value="${esc(r.name)}">
+    <input class="sys-loc" value="${esc(r.location||'')}" placeholder="場所(任意)">
+    <label class="sys-lim"><input type="checkbox" class="sys-limck" ${isLimited(r)?'checked':''}> 10-11制限</label>
+    <button class="btn sm" onclick="saveRoom('${r.id}',this)">保存</button></div>`).join("");
+}
+async function saveRoom(id, btn){
+  const row=btn.closest(".sys-row"); const name=row.querySelector(".sys-name").value.trim();
+  const loc=row.querySelector(".sys-loc").value.trim()||null; const lim=row.querySelector(".sys-limck").checked;
+  const msg=$("sysMsg"); msg.className="msg";
+  if(!name){ msg.className="msg err"; msg.textContent="名称を入力してください"; return; }
+  const patch={ name, location:loc, bookable_start_time: lim?"10:00":null, bookable_end_time: lim?"11:00":null };
+  const { data, error } = await sb.from("rooms").update(patch).eq("id",id).select();
+  if(error||!data||!data.length){ msg.className="msg err"; msg.textContent="保存失敗（管理者のみ）: "+(error?error.message:"0件"); return; }
+  msg.className="msg ok"; msg.textContent="保存しました";
+  await loadRooms(); buildWeekRoomSelect(); renderSysList(); reload();
+}
+async function addRoom(){
+  const name=$("sysAddName").value.trim(); const loc=$("sysAddLoc").value.trim()||null; const lim=$("sysAddLimited").checked;
+  const msg=$("sysMsg"); msg.className="msg";
+  if(!name){ msg.className="msg err"; msg.textContent="追加する名称を入力してください"; return; }
+  const nextSort=(Math.max(0,...S.rooms.map(r=>r.sort_order||0))+1);
+  const palette=["#3b82f6","#10b981","#f59e0b","#a855f7","#ef4444","#14b8a6","#eab308"];
+  const rec={ name, color:palette[S.rooms.length % palette.length], sort_order:nextSort, is_active:true,
+    location:loc, bookable_start_time: lim?"10:00":null, bookable_end_time: lim?"11:00":null };
+  const { data, error } = await sb.from("rooms").insert(rec).select();
+  if(error||!data||!data.length){ msg.className="msg err"; msg.textContent="追加失敗（管理者のみ）: "+(error?error.message:"0件"); return; }
+  msg.className="msg ok"; msg.textContent="追加しました";
+  $("sysAddName").value=""; $("sysAddLoc").value=""; $("sysAddLimited").checked=false;
+  await loadRooms(); buildWeekRoomSelect(); renderSysList(); reload();
+}
+
+function openSettings(){ $("stName").value=S.profile.display_name||""; $("stMsg").textContent=""; $("btnSys").classList.toggle("hidden", !S.profile.is_admin); show("stView"); }
+
 function subscribeRealtime(){
   try{ sb.channel("rt-bookings").on("postgres_changes",{event:"*",schema:"public",table:"bookings"},()=>reload()).subscribe(); }catch(e){}
   document.addEventListener("visibilitychange",()=>{ if(!document.hidden) reload(); });
 }
 
-/* ---------- boot ---------- */
+document.addEventListener("pointermove", onPointerMove);
+document.addEventListener("pointerup", onPointerUp);
+document.addEventListener("pointercancel", onPointerCancel);
 (async function boot(){
   if(!SUPABASE_URL||SUPABASE_URL.includes("YOUR-PROJECT")){ document.body.innerHTML='<div class="auth-wrap"><div class="auth-card"><h1>設定が未完了です</h1><p class="sub">config.js に Supabase の URL と anon キーを設定してください。</p></div></div>'; return; }
   sb.auth.onAuthStateChange(async (_e,session)=>{
