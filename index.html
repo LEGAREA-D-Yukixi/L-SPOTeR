@@ -61,7 +61,8 @@
   .settings-btn{font-size:20px;line-height:1;padding:5px 12px}
   .spacer{flex:1}
   .who{color:var(--muted);font-size:12px;margin-right:2px}
-  .gridscroll{overflow:auto;height:calc(100vh - 58px)}
+  #appView{display:flex;flex-direction:column;height:100vh}
+  .gridscroll{flex:1;min-height:0;overflow:auto}
   .timehead{display:flex;position:sticky;top:0;background:var(--bg2);z-index:10;border-bottom:1px solid var(--line)}
   .timehead .corner{min-width:var(--gutter);width:var(--gutter);flex:none;position:sticky;left:0;background:var(--bg2);border-right:1px solid var(--line);z-index:11}
   .hours{display:flex}
@@ -120,7 +121,7 @@
   .sys-lim input{width:auto}
   .sys-add{border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
   @media (prefers-reduced-motion: no-preference){.ev{transition:filter .12s}.ev:hover{filter:brightness(1.12)}}
-  @media (max-width:600px){:root{--gutter:116px;--px-per-hour:64px}.topbar{gap:8px}.sys-row{grid-template-columns:1fr 1fr}}
+  @media (max-width:600px){:root{--gutter:112px}.topbar{gap:8px}.sys-row{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
@@ -398,7 +399,7 @@ function render(){
 function renderDay(){
   const host=$("gridscroll"); const hours=END_H-START_H; const trackW=hours*PX_H;
   let h = `<div class="timehead"><div class="corner"></div><div class="hours">`;
-  for(let i=START_H;i<END_H;i++) h+=`<div class="hcell">${pad(i)}:00</div>`;
+  for(let i=START_H;i<END_H;i++) h+=`<div class="hcell" style="width:${PX_H}px">${pad(i)}:00</div>`;
   h+=`</div></div>`;
   for(const r of S.rooms){
     h+=`<div class="room-row"><div class="room-name"><b>${esc(r.name)}</b>`
@@ -413,7 +414,8 @@ function renderDay(){
     if(ymd(new Date())===ymd(S.date)){ const nm=minsFrom7(new Date()); if(nm>=0&&nm<=hours*60) h+=`<div class="nowline" style="left:${nm/60*PX_H}px"></div>`; }
     for(const b of S.bookings.filter(x=>x.room_id===r.id)){
       const s=new Date(b.starts_at), e=new Date(b.ends_at);
-      const left=Math.max(0,minsFrom7(s)/60*PX_H); let width=Math.max(18,(e-s)/3600000*PX_H); width=Math.min(width, trackW-left);
+      const clamp=(v,mx)=>Math.max(0,Math.min(v,mx));
+      const left=clamp(minsFrom7(s)/60*PX_H, trackW); const right=clamp(minsFrom7(e)/60*PX_H, trackW); const width=Math.max(2, right-left);
       h+=`<div class="ev" style="left:${left}px;width:${width}px;background:${r.color}" onclick="openBooking('${b.id}')">`
         +`<b>${esc(b.title||"予約")}</b><span>${esc(b.organizer_name||"")}</span></div>`;
     }
@@ -439,7 +441,8 @@ function renderWeek(){
     }
     for(const b of S.bookings.filter(x=>ymd(new Date(x.starts_at))===ymd(dd))){
       const bs=new Date(b.starts_at), be=new Date(b.ends_at);
-      const top=minsFrom7(bs)/60*WK_PXH; let height=Math.max(16,(be-bs)/3600000*WK_PXH); height=Math.min(height, hours*WK_PXH-top);
+      const colH=hours*WK_PXH; const clampW=(v)=>Math.max(0,Math.min(v,colH));
+      const top=clampW(minsFrom7(bs)/60*WK_PXH); const bot=clampW(minsFrom7(be)/60*WK_PXH); const height=Math.max(14, bot-top);
       h+=`<div class="ev" style="top:${top}px;left:2px;right:2px;height:${height}px;position:absolute;background:${r?r.color:"#3b82f6"}" onclick="openBooking('${b.id}')">`
         +`<b>${esc(b.title||"予約")}</b><span>${esc(b.organizer_name||"")}</span></div>`;
     }
@@ -452,9 +455,26 @@ function renderWeek(){
 
 function posMins(e){ const rect=drag.track.getBoundingClientRect();
   return drag.vertical ? (e.clientY-rect.top)/WK_PXH*60 : (e.clientX-rect.left)/PX_H*60; }
-function positionOv(){ if(!drag||!drag.ov) return; const b=(drag.b==null?drag.a:drag.b); const lo=Math.min(drag.a,b), hi=Math.max(drag.a,b);
-  const s=lo*CELL, en=(hi+1)*CELL;
-  if(drag.vertical){ drag.ov.style.left="2px"; drag.ov.style.right="2px"; drag.ov.style.top=(s/60*WK_PXH)+"px"; drag.ov.style.height=((en-s)/60*WK_PXH)+"px"; }
+function clampCells(lo, hi, room){
+  const N=totalCells();
+  lo=Math.max(0,Math.min(lo,N-1)); hi=Math.max(0,Math.min(hi,N-1));
+  if(isLimited(room)){ const wsC=Math.round(winStartMins(room)/CELL), weC=Math.round(winEndMins(room)/CELL);
+    lo=Math.max(lo,wsC); hi=Math.min(hi,weC-1);
+    if(hi<lo) return null; }
+  return [lo,hi];
+}
+function dragRange(aCell, bCell, room, moved){
+  let lo=Math.min(aCell,bCell), hi=Math.max(aCell,bCell);
+  if(!moved) hi=lo+1;                                   // クリックのみは30分(2枠)
+  const c=clampCells(lo,hi,room); if(!c) return null;   // 制限時間帯の外は不可
+  const startMin=c[0]*CELL, endMin=Math.min((c[1]+1)*CELL, totalMins());
+  return { startMin, endMin, start:toHM(startMin), end:toHMcap(endMin) };
+}
+function positionOv(){ if(!drag||!drag.ov) return; const b=(drag.b==null?drag.a:drag.b);
+  const c=clampCells(Math.min(drag.a,b), Math.max(drag.a,b), roomById(drag.roomId));
+  if(!c){ drag.ov.style.display="none"; return; } drag.ov.style.display="";
+  const s=c[0]*CELL, en=(c[1]+1)*CELL;
+  if(drag.vertical){ drag.ov.style.bottom="auto"; drag.ov.style.left="2px"; drag.ov.style.right="2px"; drag.ov.style.top=(s/60*WK_PXH)+"px"; drag.ov.style.height=((en-s)/60*WK_PXH)+"px"; }
   else { drag.ov.style.left=(s/60*PX_H)+"px"; drag.ov.style.width=((en-s)/60*PX_H)+"px"; } }
 function startDrag(e, vertical){
   if(e.target.closest(".ev")) return;
@@ -470,16 +490,11 @@ function onPointerMove(e){ if(!drag) return; if(drag.mouse){ drag.b=cellOf(posMi
 function onPointerUp(){ if(!drag) return; const d=drag; drag=null;
   if(d.ov&&d.ov.parentNode) d.ov.parentNode.removeChild(d.ov);
   if(!d.mouse && d.moved) return;
-  const b=(d.b==null?d.a:d.b); let lo=Math.min(d.a,b), hi=Math.max(d.a,b);
-  if(!d.moved) hi=lo+1;                                   // クリックは30分(2枠)
-  const r=roomById(d.roomId);
-  if(isLimited(r)){ const wsC=Math.round(winStartMins(r)/CELL), weC=Math.round(winEndMins(r)/CELL);
-    lo=Math.max(lo,wsC); hi=Math.min(hi, weC-1);
-    if(hi<lo) return;                                     // 制限時間帯の外は選択不可
-  }
-  const startMin=lo*CELL, endMin=Math.min((hi+1)*CELL, totalMins());
+  const b=(d.b==null?d.a:d.b);
+  const r=dragRange(d.a, b, roomById(d.roomId), d.moved);
+  if(!r) return;
   const date = d.vertical ? d.track.dataset.date : ymd(S.date);
-  openBooking(null,{ room:d.roomId, date, start:toHM(startMin), end:toHMcap(endMin) });
+  openBooking(null,{ room:d.roomId, date, start:r.start, end:r.end });
 }
 function onPointerCancel(){ if(drag){ if(drag.ov&&drag.ov.parentNode) drag.ov.parentNode.removeChild(drag.ov); drag=null; } }
 
