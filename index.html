@@ -63,15 +63,15 @@
   .who{color:var(--muted);font-size:12px;margin-right:2px}
   #appView{display:flex;flex-direction:column;height:100vh}
   .gridscroll{flex:1;min-height:0;overflow:auto}
-  .timehead{display:flex;position:sticky;top:0;background:var(--bg2);z-index:10;border-bottom:1px solid var(--line)}
+  .timehead{display:flex;width:max-content;position:sticky;top:0;background:var(--bg2);z-index:10;border-bottom:1px solid var(--line)}
   .timehead .corner{min-width:var(--gutter);width:var(--gutter);flex:none;position:sticky;left:0;background:var(--bg2);border-right:1px solid var(--line);z-index:11}
   .hours{display:flex}
   .hcell{width:var(--px-per-hour);flex:none;font-size:11px;color:var(--muted);padding:8px 0 8px 6px;border-left:1px solid var(--line)}
-  .room-row{display:flex;border-bottom:1px solid var(--line)}
+  .room-row{display:flex;width:max-content;border-bottom:1px solid var(--line)}
   .room-name{min-width:var(--gutter);width:var(--gutter);flex:none;position:sticky;left:0;background:var(--bg2);border-right:1px solid var(--line);padding:8px 10px;z-index:5;display:flex;flex-direction:column;justify-content:center;line-height:1.3}
   .room-name b{font-size:13px} .room-name small{color:var(--muted);font-size:11px}
   .room-name .loc{color:var(--muted);font-size:10px}
-  .track{position:relative;height:var(--row-h);touch-action:pan-x pan-y}
+  .track{position:relative;flex:none;height:var(--row-h);touch-action:pan-x pan-y}
   .gline{position:absolute;top:0;bottom:0;border-left:1px solid var(--line);pointer-events:none}
   .gline.q{border-left:1px solid rgba(255,255,255,.06)}
   .disband{position:absolute;background:rgba(8,12,28,.55);pointer-events:none;z-index:2}
