@@ -11,7 +11,7 @@
     --bg:#111a33; --bg2:#0e1730; --panel:#1a2748; --panel2:#243359; --line:#31406e;
     --text:#eef2fb; --muted:#93a2cc; --accent:#ee5340; --accent-d:#d8402f;
     --ok:#37d288; --danger:#ff5b57;
-    --row-h:56px; --px-per-hour:80px; --gutter:158px; --start-hour:7; --end-hour:23;
+    --row-h:56px; --px-per-hour:80px; --gutter:158px; --start-hour:7; --end-hour:24;
   }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%}
@@ -27,7 +27,7 @@
   .pill{display:inline-block;border:1px solid rgba(255,255,255,.34);color:#fff;border-radius:6px;padding:3px 11px;font-size:11px;letter-spacing:2px;font-weight:600}
   .auth-wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
   .auth-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:30px;width:100%;max-width:390px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
-  .auth-card h1{font-size:23px;margin:16px 0 8px;color:var(--accent);font-weight:800}
+  .auth-card h1{font-size:23px;margin:16px 0 8px;color:var(--text);font-weight:800}
   .auth-card p.sub{color:var(--muted);margin:0 0 20px;font-size:13px}
   .tabs{display:flex;gap:6px;margin-bottom:18px;background:var(--bg);padding:4px;border-radius:10px}
   .tabs button{flex:1;border:0;background:transparent;color:var(--muted);padding:9px;border-radius:7px;font-size:13px}
@@ -36,6 +36,7 @@
   label.fld span{display:block;color:var(--muted);font-size:12px;margin-bottom:6px}
   input,select{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:10px 12px;font-size:14px}
   input:focus,select:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
+  input:disabled{opacity:.4}
   .ro{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px 12px;color:var(--muted)}
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:9px;padding:10px 14px;font-size:14px;background:var(--accent);color:#fff;font-weight:700}
   .btn:hover{background:var(--accent-d)}
@@ -50,7 +51,6 @@
   .msg.err{color:var(--danger)} .msg.ok{color:var(--ok)}
   .topbar{display:flex;align-items:center;gap:12px;padding:10px 16px;background:rgba(16,23,48,.92);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;flex-wrap:wrap;backdrop-filter:blur(6px)}
   .topbar .apptitle{font-weight:800;font-size:15px;color:#fff;margin-left:2px}
-  .topbar .apptitle b{color:var(--accent)}
   .nav{display:flex;align-items:center;gap:4px}
   .nav button,.seg button,.icon-btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:7px 11px;font-size:13px}
   .nav button:hover,.icon-btn:hover{background:#2b3c66}
@@ -69,9 +69,11 @@
   .room-row{display:flex;border-bottom:1px solid var(--line)}
   .room-name{min-width:var(--gutter);width:var(--gutter);flex:none;position:sticky;left:0;background:var(--bg2);border-right:1px solid var(--line);padding:8px 10px;z-index:5;display:flex;flex-direction:column;justify-content:center;line-height:1.3}
   .room-name b{font-size:13px} .room-name small{color:var(--muted);font-size:11px}
-  .room-name .loc{color:#c7b48a;font-size:10px}
+  .room-name .loc{color:var(--muted);font-size:10px}
   .track{position:relative;height:var(--row-h);touch-action:pan-x pan-y}
-  .track .slot{position:absolute;top:0;height:100%;border-left:1px solid var(--line)}
+  .gline{position:absolute;top:0;bottom:0;border-left:1px solid var(--line);pointer-events:none}
+  .gline.q{border-left:1px solid rgba(255,255,255,.06)}
+  .disband{position:absolute;background:rgba(8,12,28,.55);pointer-events:none;z-index:2}
   .track:hover{background:rgba(255,255,255,.02)}
   .selov{position:absolute;top:3px;bottom:3px;background:rgba(238,83,64,.32);border:1px solid var(--accent);border-radius:6px;pointer-events:none;z-index:4}
   .nowline{position:absolute;top:0;height:100%;width:2px;background:var(--accent);z-index:6}
@@ -82,13 +84,12 @@
   .week .wh{position:sticky;top:0;background:var(--bg2);border-bottom:1px solid var(--line);padding:8px 4px;text-align:center;font-size:12px;z-index:10}
   .week .wh.today{color:var(--accent);font-weight:700}
   .week .tlabel{font-size:11px;color:var(--muted);text-align:right;padding:2px 6px 0 0;border-top:1px solid var(--line)}
-  .week .daycol{position:relative;border-left:1px solid var(--line)}
+  .week .daycol{position:relative;border-left:1px solid var(--line);touch-action:pan-x pan-y}
   .week .hourcell{height:48px;border-top:1px solid var(--line)}
   .week .ev{font-size:10px}
   .overlay{position:fixed;inset:0;background:rgba(6,10,24,.62);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
   .modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;width:100%;max-width:440px;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)}
   .modal h2{margin:0 0 16px;font-size:18px}
-  .modal h2 .accent{color:var(--accent)}
   .row2{display:flex;gap:10px}.row2>*{flex:1}
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .chip{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:3px 8px;font-size:12px;display:flex;align-items:center;gap:6px}
@@ -100,7 +101,7 @@
   .list .item small{color:var(--muted)}
   .closex{float:right;background:transparent;border:0;color:var(--muted);font-size:22px;line-height:1;margin:-8px -8px 0 0}
   .rp-kpi{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin:6px 0 4px}
-  .rp-kpi b{font-size:16px;color:var(--accent)}
+  .rp-kpi b{font-size:16px}
   .rp-h{font-size:13px;color:var(--muted);margin:16px 0 8px;font-weight:600}
   .rp-row{display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12px}
   .rp-k{width:120px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -112,9 +113,9 @@
   .rp-t th{color:var(--muted);font-weight:600;text-align:left}
   .place-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
   .place-card{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px}
-  .place-card b{display:block;font-size:13px} .place-card small{color:#c7b48a;font-size:10px}
-  .sys-row{display:grid;grid-template-columns:1.2fr 1fr auto auto;gap:8px;align-items:center;margin-bottom:8px}
-  .sys-row input{padding:8px 10px}
+  .place-card b{display:block;font-size:13px} .place-card small{color:var(--muted);font-size:10px}
+  .sys-row{display:grid;grid-template-columns:1.1fr .9fr auto 82px 82px auto;gap:6px;align-items:center;margin-bottom:8px}
+  .sys-row input[type=text],.sys-row input[type=time]{padding:8px 8px}
   .sys-lim{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);white-space:nowrap}
   .sys-lim input{width:auto}
   .sys-add{border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
@@ -154,7 +155,7 @@
 <div id="appView" class="hidden">
   <div class="topbar">
     <div class="lockup"><span class="mark"></span><span class="wm">LEGAREA</span></div>
-    <span class="apptitle">会議<b>ブース</b>予約</span>
+    <span class="apptitle">会議ブース予約</span>
     <div class="nav">
       <button onclick="shiftDate(-1)" aria-label="前へ">‹</button>
       <button onclick="goToday()">今日</button>
@@ -247,17 +248,19 @@
 </div>
 
 <div id="sysView" class="overlay hidden">
-  <div class="modal" style="max-width:620px">
+  <div class="modal" style="max-width:680px">
     <button class="closex" onclick="closeModal('sysView')" aria-label="閉じる">×</button>
-    <h2><span class="accent">システム設定</span>（管理者）</h2>
-    <p class="hint" style="margin-bottom:10px">会議ブースの名称・場所・時間帯制限の変更、および新規追加ができます。</p>
+    <h2>システム設定（管理者）</h2>
+    <p class="hint" style="margin-bottom:10px">会議ブースの名称・場所・時間制限（時間帯は自由に設定可）を変更、または新規追加できます。</p>
     <div id="sysList"></div>
     <div class="sys-add">
       <div class="rp-h" style="margin-top:0">会議ブースを追加</div>
       <div class="sys-row">
-        <input id="sysAddName" type="text" placeholder="名称 (例: 会議ブース⑭)">
-        <input id="sysAddLoc" type="text" placeholder="場所(任意)">
-        <label class="sys-lim"><input id="sysAddLimited" type="checkbox"> 10-11制限</label>
+        <input id="sysAddName" class="sys-name" type="text" placeholder="名称 (例: 会議ブース⑭)">
+        <input id="sysAddLoc" class="sys-loc" type="text" placeholder="場所(任意)">
+        <label class="sys-lim"><input id="sysAddLimited" type="checkbox" class="sys-limck" onchange="syncLimInputs(this)"> 制限</label>
+        <input id="sysAddWs" class="sys-ws" type="time" step="60" value="10:00" disabled>
+        <input id="sysAddWe" class="sys-we" type="time" step="60" value="11:00" disabled>
         <button class="btn sm" onclick="addRoom()">追加</button>
       </div>
     </div>
@@ -284,7 +287,7 @@
 const { SUPABASE_URL, SUPABASE_ANON_KEY } = window.APP_CONFIG || {};
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const DOMAIN = "@legarea.jp";
-const START_H = 7, END_H = 23, SNAP = 15, CLICK_DUR = 30, PX_H = 80;
+const START_H = 7, END_H = 24, CELL = 15, PX_H = 80, WK_PXH = 48;
 const S = { user:null, profile:null, rooms:[], bookings:[], view:"day", date:new Date(), authTab:"login", names:[], editId:null, chips:[] };
 let drag=null;
 
@@ -298,8 +301,14 @@ function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; 
 function weekStart(d){ const x=dayStart(d); x.setDate(x.getDate()-x.getDay()); return x; }
 function fmtDateJP(d){ const w=["日","月","火","水","木","金","土"][d.getDay()]; return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日(${w})`; }
 function minsFrom7(d){ return (d.getHours()-START_H)*60 + d.getMinutes(); }
-function snap(m){ return Math.max(0, Math.min(Math.round(m/SNAP)*SNAP, (END_H-START_H)*60)); }
-function toHM(m){ return `${pad(START_H+Math.floor(m/60))}:${pad(m%60)}`; }
+function totalMins(){ return (END_H-START_H)*60; }
+function totalCells(){ return totalMins()/CELL; }
+function cellOf(mins){ return Math.max(0, Math.min(Math.floor(mins/CELL), totalCells()-1)); }
+function toHM(m){ m=Math.max(0,Math.min(m,totalMins())); return `${pad(START_H+Math.floor(m/60))}:${pad(m%60)}`; }
+function toHMcap(m){ return m>=totalMins()? "23:59" : toHM(m); }
+function hmToMin(t){ const p=t.slice(0,5).split(":"); return (+p[0])*60+(+p[1]); }
+function winStartMins(r){ return hmToMin(r.bookable_start_time)-START_H*60; }
+function winEndMins(r){ return hmToMin(r.bookable_end_time)-START_H*60; }
 function show(id){ $(id).classList.remove("hidden"); }
 function hide(id){ $(id).classList.add("hidden"); }
 function closeModal(id){ hide(id); }
@@ -387,28 +396,31 @@ function render(){
   S.view==="day"? renderDay() : renderWeek();
 }
 function renderDay(){
-  const host=$("gridscroll"); const hours=END_H-START_H;
+  const host=$("gridscroll"); const hours=END_H-START_H; const trackW=hours*PX_H;
   let h = `<div class="timehead"><div class="corner"></div><div class="hours">`;
-  for(let i=START_H;i<=END_H;i++) h+=`<div class="hcell">${pad(i)}:00</div>`;
+  for(let i=START_H;i<END_H;i++) h+=`<div class="hcell">${pad(i)}:00</div>`;
   h+=`</div></div>`;
-  const trackW = hours*PX_H;
   for(const r of S.rooms){
     h+=`<div class="room-row"><div class="room-name"><b>${esc(r.name)}</b>`
       +`${r.location?`<span class="loc">${esc(r.location)}</span>`:""}`
       +`${isLimited(r)?`<small>${hhmmShort(r.bookable_start_time)}〜${hhmmShort(r.bookable_end_time)}のみ</small>`:""}</div>`;
     h+=`<div class="track" style="width:${trackW}px" data-room="${r.id}">`;
-    for(let i=0;i<hours;i++) h+=`<div class="slot" style="left:${i*PX_H}px;width:${PX_H}px"></div>`;
+    for(let m=0;m<=hours*60;m+=CELL){ const x=m/60*PX_H; h+=`<div class="gline${m%60===0?"":" q"}" style="left:${x}px"></div>`; }
+    if(isLimited(r)){ const ws=winStartMins(r), we=winEndMins(r), tot=hours*60;
+      if(ws>0) h+=`<div class="disband" style="top:0;bottom:0;left:0;width:${ws/60*PX_H}px"></div>`;
+      if(we<tot) h+=`<div class="disband" style="top:0;bottom:0;left:${we/60*PX_H}px;width:${(tot-we)/60*PX_H}px"></div>`;
+    }
     if(ymd(new Date())===ymd(S.date)){ const nm=minsFrom7(new Date()); if(nm>=0&&nm<=hours*60) h+=`<div class="nowline" style="left:${nm/60*PX_H}px"></div>`; }
     for(const b of S.bookings.filter(x=>x.room_id===r.id)){
       const s=new Date(b.starts_at), e=new Date(b.ends_at);
-      const left=Math.max(0,minsFrom7(s)/60*PX_H), width=Math.max(18,(e-s)/3600000*PX_H);
+      const left=Math.max(0,minsFrom7(s)/60*PX_H); let width=Math.max(18,(e-s)/3600000*PX_H); width=Math.min(width, trackW-left);
       h+=`<div class="ev" style="left:${left}px;width:${width}px;background:${r.color}" onclick="openBooking('${b.id}')">`
         +`<b>${esc(b.title||"予約")}</b><span>${esc(b.organizer_name||"")}</span></div>`;
     }
     h+=`</div></div>`;
   }
   host.innerHTML=h;
-  host.querySelectorAll(".track").forEach(t=> t.addEventListener("pointerdown", trackPointerDown));
+  host.querySelectorAll(".track").forEach(t=> t.addEventListener("pointerdown", dayDown));
 }
 function renderWeek(){
   const host=$("gridscroll"); const s=weekStart(S.date); const hours=END_H-START_H;
@@ -416,14 +428,18 @@ function renderWeek(){
   let h=`<div class="week"><div class="wh"></div>`;
   for(let d=0;d<7;d++){ const dd=addDays(s,d); const today=ymd(dd)===ymd(new Date());
     h+=`<div class="wh ${today?"today":""}">${["日","月","火","水","木","金","土"][dd.getDay()]} ${dd.getMonth()+1}/${dd.getDate()}</div>`; }
-  h+=`<div>`; for(let i=START_H;i<END_H;i++) h+=`<div class="tlabel" style="height:48px">${pad(i)}:00</div>`; h+=`</div>`;
+  h+=`<div>`; for(let i=START_H;i<END_H;i++) h+=`<div class="tlabel" style="height:${WK_PXH}px">${pad(i)}:00</div>`; h+=`</div>`;
   for(let d=0;d<7;d++){
     const dd=addDays(s,d);
     h+=`<div class="daycol" data-date="${ymd(dd)}">`;
     for(let i=START_H;i<END_H;i++) h+=`<div class="hourcell"></div>`;
+    if(isLimited(r)){ const ws=winStartMins(r), we=winEndMins(r), tot=hours*60;
+      if(ws>0) h+=`<div class="disband" style="left:0;right:0;top:0;height:${ws/60*WK_PXH}px"></div>`;
+      if(we<tot) h+=`<div class="disband" style="left:0;right:0;top:${we/60*WK_PXH}px;height:${(tot-we)/60*WK_PXH}px"></div>`;
+    }
     for(const b of S.bookings.filter(x=>ymd(new Date(x.starts_at))===ymd(dd))){
       const bs=new Date(b.starts_at), be=new Date(b.ends_at);
-      const top=minsFrom7(bs)/60*48, height=Math.max(16,(be-bs)/3600000*48);
+      const top=minsFrom7(bs)/60*WK_PXH; let height=Math.max(16,(be-bs)/3600000*WK_PXH); height=Math.min(height, hours*WK_PXH-top);
       h+=`<div class="ev" style="top:${top}px;left:2px;right:2px;height:${height}px;position:absolute;background:${r?r.color:"#3b82f6"}" onclick="openBooking('${b.id}')">`
         +`<b>${esc(b.title||"予約")}</b><span>${esc(b.organizer_name||"")}</span></div>`;
     }
@@ -431,32 +447,39 @@ function renderWeek(){
   }
   h+=`</div>`;
   host.innerHTML=h;
-  host.querySelectorAll(".daycol").forEach(col=>{
-    col.addEventListener("click",ev=>{
-      if(ev.target.closest(".ev"))return;
-      const rect=col.getBoundingClientRect(); const y=ev.clientY-rect.top;
-      const mins=snap(y/48*60); openBooking(null,{ room:rid, date:col.dataset.date, start:toHM(mins), end:toHM(Math.min(mins+CLICK_DUR,(END_H-START_H)*60)) });
-    });
-  });
+  host.querySelectorAll(".daycol").forEach(col=> col.addEventListener("pointerdown", weekDown));
 }
 
-function xToMins(track, clientX){ const r=track.getBoundingClientRect(); return (clientX-r.left)/PX_H*60; }
+function posMins(e){ const rect=drag.track.getBoundingClientRect();
+  return drag.vertical ? (e.clientY-rect.top)/WK_PXH*60 : (e.clientX-rect.left)/PX_H*60; }
 function positionOv(){ if(!drag||!drag.ov) return; const b=(drag.b==null?drag.a:drag.b); const lo=Math.min(drag.a,b), hi=Math.max(drag.a,b);
-  drag.ov.style.left=(lo/60*PX_H)+"px"; drag.ov.style.width=Math.max(2,(hi-lo)/60*PX_H)+"px"; }
-function trackPointerDown(e){
+  const s=lo*CELL, en=(hi+1)*CELL;
+  if(drag.vertical){ drag.ov.style.left="2px"; drag.ov.style.right="2px"; drag.ov.style.top=(s/60*WK_PXH)+"px"; drag.ov.style.height=((en-s)/60*WK_PXH)+"px"; }
+  else { drag.ov.style.left=(s/60*PX_H)+"px"; drag.ov.style.width=((en-s)/60*PX_H)+"px"; } }
+function startDrag(e, vertical){
   if(e.target.closest(".ev")) return;
-  const track=e.currentTarget;
-  drag={ track, roomId:track.dataset.room, a:snap(xToMins(track,e.clientX)), b:null, mouse:(e.pointerType==="mouse"), moved:false, ov:null };
-  if(drag.mouse){ e.preventDefault(); drag.ov=document.createElement("div"); drag.ov.className="selov"; track.appendChild(drag.ov); positionOv();
-    try{ track.setPointerCapture(e.pointerId); }catch(_){} }
+  const track=e.currentTarget; const rid = vertical ? $("weekRoom").value : track.dataset.room;
+  if(!rid) return;
+  drag={ track, vertical, roomId:rid, a:cellOf(0), b:null, mouse:(e.pointerType==="mouse"), moved:false, ov:null };
+  drag.a = cellOf(posMins(e));
+  if(drag.mouse){ e.preventDefault(); drag.ov=document.createElement("div"); drag.ov.className="selov"; track.appendChild(drag.ov); positionOv(); try{track.setPointerCapture(e.pointerId);}catch(_){} }
 }
-function onPointerMove(e){ if(!drag) return; if(drag.mouse){ drag.b=snap(xToMins(drag.track,e.clientX)); drag.moved=true; positionOv(); } else { drag.moved=true; } }
+function dayDown(e){ startDrag(e,false); }
+function weekDown(e){ startDrag(e,true); }
+function onPointerMove(e){ if(!drag) return; if(drag.mouse){ drag.b=cellOf(posMins(e)); drag.moved=true; positionOv(); } else drag.moved=true; }
 function onPointerUp(){ if(!drag) return; const d=drag; drag=null;
   if(d.ov&&d.ov.parentNode) d.ov.parentNode.removeChild(d.ov);
   if(!d.mouse && d.moved) return;
   const b=(d.b==null?d.a:d.b); let lo=Math.min(d.a,b), hi=Math.max(d.a,b);
-  if(hi-lo < SNAP) hi = Math.min(lo+CLICK_DUR,(END_H-START_H)*60);
-  openBooking(null,{ room:d.roomId, date:ymd(S.date), start:toHM(lo), end:toHM(hi) });
+  if(!d.moved) hi=lo+1;                                   // クリックは30分(2枠)
+  const r=roomById(d.roomId);
+  if(isLimited(r)){ const wsC=Math.round(winStartMins(r)/CELL), weC=Math.round(winEndMins(r)/CELL);
+    lo=Math.max(lo,wsC); hi=Math.min(hi, weC-1);
+    if(hi<lo) return;                                     // 制限時間帯の外は選択不可
+  }
+  const startMin=lo*CELL, endMin=Math.min((hi+1)*CELL, totalMins());
+  const date = d.vertical ? d.track.dataset.date : ymd(S.date);
+  openBooking(null,{ room:d.roomId, date, start:toHM(startMin), end:toHMcap(endMin) });
 }
 function onPointerCancel(){ if(drag){ if(drag.ov&&drag.ov.parentNode) drag.ov.parentNode.removeChild(drag.ov); drag=null; } }
 
@@ -490,13 +513,17 @@ function openBooking(id, prefill){
     if(prefill){ $("bkRoom").value=prefill.room; $("bkDate").value=prefill.date;
       $("bkStart").value=prefill.start;
       if(prefill.end){ $("bkEnd").value=prefill.end; }
-      else { const [ph,pm]=prefill.start.split(":").map(Number); let em=Math.min(ph*60+pm+CLICK_DUR, END_H*60); $("bkEnd").value=`${pad(Math.floor(em/60))}:${pad(em%60)}`; }
+      else { const em=Math.min(hmToMin(prefill.start)-START_H*60+30, totalMins()); $("bkEnd").value=toHMcap(em); }
     } else { $("bkDate").value=ymd(S.date); }
   }
   $("bkPartInput").value=""; renderChips(); bkRoomHint(); show("bkView");
 }
 function bkRoomHint(){ const r=roomById($("bkRoom").value);
-  $("bkHint").textContent = isLimited(r)? `この会議ブースは ${hhmmShort(r.bookable_start_time)}〜${hhmmShort(r.bookable_end_time)} のみ予約できます`:""; }
+  if(isLimited(r)){ const ws=hhmmShort(r.bookable_start_time), we=hhmmShort(r.bookable_end_time);
+    $("bkHint").textContent=`この会議ブースは ${ws}〜${we} のみ予約できます`;
+    $("bkStart").min=ws; $("bkStart").max=we; $("bkEnd").min=ws; $("bkEnd").max=we;
+  } else { $("bkHint").textContent=""; ["bkStart","bkEnd"].forEach(id=>{ $(id).removeAttribute("min"); $(id).removeAttribute("max"); }); }
+}
 function renderChips(){ $("bkChips").innerHTML=S.chips.map((c,i)=>`<span class="chip">${esc(c)}<button onclick="rmChip(${i})" aria-label="削除">×</button></span>`).join(""); }
 function rmChip(i){ S.chips.splice(i,1); renderChips(); }
 $("bkPartInput").addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===","){ e.preventDefault(); const v=e.target.value.trim(); if(v&&!S.chips.includes(v)){ S.chips.push(v); renderChips(); } e.target.value=""; } });
@@ -505,6 +532,9 @@ async function saveBooking(){
   const msg=$("bkMsg"); msg.className="msg"; msg.textContent="";
   const rid=$("bkRoom").value, date=$("bkDate").value, st=$("bkStart").value, et=$("bkEnd").value;
   if(!rid||!date||!st||!et){ msg.className="msg err"; msg.textContent="会議ブース・日付・時間を入力してください"; return; }
+  const r=roomById(rid);
+  if(isLimited(r)){ const ws=hhmmShort(r.bookable_start_time), we=hhmmShort(r.bookable_end_time);
+    if(st<ws||et>we){ msg.className="msg err"; msg.textContent=`この会議ブースは ${ws}〜${we} のみ予約できます`; return; } }
   const pend=$("bkPartInput").value.trim(); if(pend&&!S.chips.includes(pend)) S.chips.push(pend);
   const [y,mo,da]=date.split("-").map(Number); const [sh,sm]=st.split(":").map(Number); const [eh,em]=et.split(":").map(Number);
   const starts=atLocal(y,mo-1,da,sh,sm), ends=atLocal(y,mo-1,da,eh,em);
@@ -548,7 +578,7 @@ async function runSearch(){
   const busy=new Set((data||[]).map(b=>b.room_id));
   const free=S.rooms.filter(r=>{ if(busy.has(r.id))return false;
     if(isLimited(r)){ const ws=r.bookable_start_time.slice(0,5), we=r.bookable_end_time.slice(0,5); if(st<ws||et>we) return false; } return true; });
-  out.innerHTML = free.length? free.map(r=>`<div class="item"><span><b>${esc(r.name)}</b>${r.location?` <small style="color:#c7b48a">${esc(r.location)}</small>`:""}${isLimited(r)?` <small>${hhmmShort(r.bookable_start_time)}〜${hhmmShort(r.bookable_end_time)}</small>`:""}</span>`
+  out.innerHTML = free.length? free.map(r=>`<div class="item"><span><b>${esc(r.name)}</b>${r.location?` <small>${esc(r.location)}</small>`:""}${isLimited(r)?` <small>${hhmmShort(r.bookable_start_time)}〜${hhmmShort(r.bookable_end_time)}</small>`:""}</span>`
     +`<button class="btn sm" onclick='closeModal("seView");openBooking(null,${JSON.stringify({room:r.id,date,start:st,end:et}).replace(/'/g,"&#39;")})'>予約</button></div>`).join("")
     : `<div class="hint">この時間に空いている会議ブースはありません。</div>`;
 }
@@ -614,37 +644,51 @@ function openPlace(){
   $("placeOut").innerHTML=h; show("placeView");
 }
 
-function openSys(){ if(!S.profile.is_admin) return; renderSysList(); $("sysAddName").value=""; $("sysAddLoc").value=""; $("sysAddLimited").checked=false; $("sysMsg").textContent=""; show("sysView"); }
+function openSys(){ if(!S.profile.is_admin) return; renderSysList(); $("sysAddName").value=""; $("sysAddLoc").value=""; $("sysAddLimited").checked=false; syncLimInputs($("sysAddLimited")); $("sysMsg").textContent=""; show("sysView"); }
+function syncLimInputs(ck){ const row=ck.closest(".sys-row"); if(!row) return; const on=ck.checked;
+  const ws=row.querySelector(".sys-ws"), we=row.querySelector(".sys-we"); if(ws) ws.disabled=!on; if(we) we.disabled=!on; }
 function renderSysList(){
   $("sysList").innerHTML = S.rooms.map(r=>`<div class="sys-row" data-id="${r.id}">
-    <input class="sys-name" value="${esc(r.name)}">
-    <input class="sys-loc" value="${esc(r.location||'')}" placeholder="場所(任意)">
-    <label class="sys-lim"><input type="checkbox" class="sys-limck" ${isLimited(r)?'checked':''}> 10-11制限</label>
+    <input class="sys-name" type="text" value="${esc(r.name)}">
+    <input class="sys-loc" type="text" value="${esc(r.location||'')}" placeholder="場所">
+    <label class="sys-lim"><input type="checkbox" class="sys-limck" ${isLimited(r)?'checked':''} onchange="syncLimInputs(this)"> 制限</label>
+    <input class="sys-ws" type="time" step="60" value="${isLimited(r)?hhmmShort(r.bookable_start_time):'10:00'}" ${isLimited(r)?'':'disabled'}>
+    <input class="sys-we" type="time" step="60" value="${isLimited(r)?hhmmShort(r.bookable_end_time):'11:00'}" ${isLimited(r)?'':'disabled'}>
     <button class="btn sm" onclick="saveRoom('${r.id}',this)">保存</button></div>`).join("");
+}
+function mapRoomError(error, zero){
+  const m=error? (error.message||""):"";
+  if(/location|organizer_name|does not exist|schema cache|column/i.test(m)) return "DB未更新の可能性。先に 03_booths_upgrade.sql を実行してください（詳細: "+m+"）";
+  if(zero || /row-level security|permission denied|not allowed/i.test(m)) return "権限がありません。管理者権限、または 03_booths_upgrade.sql の適用をご確認ください"+(m?"（詳細: "+m+"）":"");
+  return "失敗しました: "+(m||"不明なエラー");
 }
 async function saveRoom(id, btn){
   const row=btn.closest(".sys-row"); const name=row.querySelector(".sys-name").value.trim();
   const loc=row.querySelector(".sys-loc").value.trim()||null; const lim=row.querySelector(".sys-limck").checked;
+  const ws=row.querySelector(".sys-ws").value, we=row.querySelector(".sys-we").value;
   const msg=$("sysMsg"); msg.className="msg";
   if(!name){ msg.className="msg err"; msg.textContent="名称を入力してください"; return; }
-  const patch={ name, location:loc, bookable_start_time: lim?"10:00":null, bookable_end_time: lim?"11:00":null };
+  if(lim && (!ws||!we||ws>=we)){ msg.className="msg err"; msg.textContent="制限時間帯を正しく指定してください（開始<終了）"; return; }
+  const patch={ name, location:loc, bookable_start_time: lim?ws:null, bookable_end_time: lim?we:null };
   const { data, error } = await sb.from("rooms").update(patch).eq("id",id).select();
-  if(error||!data||!data.length){ msg.className="msg err"; msg.textContent="保存失敗（管理者のみ）: "+(error?error.message:"0件"); return; }
+  if(error||!data||!data.length){ msg.className="msg err"; msg.textContent="保存失敗: "+mapRoomError(error, !error); return; }
   msg.className="msg ok"; msg.textContent="保存しました";
   await loadRooms(); buildWeekRoomSelect(); renderSysList(); reload();
 }
 async function addRoom(){
   const name=$("sysAddName").value.trim(); const loc=$("sysAddLoc").value.trim()||null; const lim=$("sysAddLimited").checked;
+  const ws=$("sysAddWs").value, we=$("sysAddWe").value;
   const msg=$("sysMsg"); msg.className="msg";
   if(!name){ msg.className="msg err"; msg.textContent="追加する名称を入力してください"; return; }
+  if(lim && (!ws||!we||ws>=we)){ msg.className="msg err"; msg.textContent="制限時間帯を正しく指定してください（開始<終了）"; return; }
   const nextSort=(Math.max(0,...S.rooms.map(r=>r.sort_order||0))+1);
   const palette=["#3b82f6","#10b981","#f59e0b","#a855f7","#ef4444","#14b8a6","#eab308"];
   const rec={ name, color:palette[S.rooms.length % palette.length], sort_order:nextSort, is_active:true,
-    location:loc, bookable_start_time: lim?"10:00":null, bookable_end_time: lim?"11:00":null };
+    location:loc, bookable_start_time: lim?ws:null, bookable_end_time: lim?we:null };
   const { data, error } = await sb.from("rooms").insert(rec).select();
-  if(error||!data||!data.length){ msg.className="msg err"; msg.textContent="追加失敗（管理者のみ）: "+(error?error.message:"0件"); return; }
+  if(error||!data||!data.length){ msg.className="msg err"; msg.textContent="追加失敗: "+mapRoomError(error, !error); return; }
   msg.className="msg ok"; msg.textContent="追加しました";
-  $("sysAddName").value=""; $("sysAddLoc").value=""; $("sysAddLimited").checked=false;
+  $("sysAddName").value=""; $("sysAddLoc").value=""; $("sysAddLimited").checked=false; syncLimInputs($("sysAddLimited"));
   await loadRooms(); buildWeekRoomSelect(); renderSysList(); reload();
 }
 
