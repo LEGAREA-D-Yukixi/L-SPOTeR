@@ -101,6 +101,17 @@
   .list .item{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px}
   .list .item small{color:var(--muted)}
   .closex{float:right;background:transparent;border:0;color:var(--muted);font-size:20px;line-height:1;margin:-6px -6px 0 0}
+  .rp-kpi{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin:6px 0 4px}
+  .rp-kpi b{font-size:16px}
+  .rp-h{font-size:13px;color:var(--muted);margin:16px 0 8px;font-weight:600}
+  .rp-row{display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12px}
+  .rp-k{width:120px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rp-bar{flex:1;background:var(--bg);border-radius:6px;height:14px;overflow:hidden;border:1px solid var(--line)}
+  .rp-bar>div{height:100%;background:var(--accent)}
+  .rp-v{width:112px;flex:none;text-align:right;color:var(--muted)}
+  .rp-t{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}
+  .rp-t th,.rp-t td{border-bottom:1px solid var(--line);padding:6px 8px}
+  .rp-t th{color:var(--muted);font-weight:600;text-align:left}
   @media (prefers-reduced-motion: no-preference){.ev{transition:filter .12s}.ev:hover{filter:brightness(1.12)}}
   @media (max-width:600px){:root{--gutter:110px;--px-per-hour:64px}.topbar{gap:8px}}
 </style>
@@ -152,6 +163,7 @@
     <div class="spacer"></div>
     <button class="icon-btn" onclick="openSearch()">空き検索</button>
     <button class="icon-btn" onclick="openMine()">自分の予約</button>
+    <button class="icon-btn" onclick="openReport()">利用状況</button>
     <span class="who" id="whoLabel"></span>
     <button class="icon-btn" onclick="openSettings()" aria-label="設定">⚙</button>
   </div>
@@ -206,6 +218,20 @@
     <button class="closex" onclick="closeModal('myView')" aria-label="閉じる">×</button>
     <h2>自分の予約</h2>
     <div id="myList" class="list"></div>
+  </div>
+</div>
+
+<!-- ============ REPORT MODAL ============ -->
+<div id="rpView" class="overlay hidden">
+  <div class="modal" style="max-width:560px">
+    <button class="closex" onclick="closeModal('rpView')" aria-label="閉じる">×</button>
+    <h2>利用状況</h2>
+    <div class="row2">
+      <label class="fld"><span>開始日</span><input id="rpFrom" type="date"></label>
+      <label class="fld"><span>終了日</span><input id="rpTo" type="date"></label>
+    </div>
+    <button class="btn block" onclick="runReport()">集計する</button>
+    <div id="rpOut"></div>
   </div>
 </div>
 
@@ -519,6 +545,37 @@ async function openMine(){
 }
 function jumpTo(iso){ S.date=new Date(iso); S.view="day"; setView("day"); }
 
+/* ---------- report (usage) ---------- */
+function openReport(){ const now=new Date(); const first=new Date(now.getFullYear(),now.getMonth(),1);
+  $("rpFrom").value=ymd(first); $("rpTo").value=ymd(now); $("rpOut").innerHTML=""; show("rpView"); runReport(); }
+async function runReport(){
+  const from=$("rpFrom").value, to=$("rpTo").value; const out=$("rpOut");
+  if(!from||!to){ out.innerHTML=`<div class="hint">期間を指定してください</div>`; return; }
+  const [fy,fm,fd]=from.split("-").map(Number); const [ty,tm,td]=to.split("-").map(Number);
+  const start=atLocal(fy,fm-1,fd,0,0), end=addDays(atLocal(ty,tm-1,td,0,0),1);
+  if(end<=start){ out.innerHTML=`<div class="hint">終了日は開始日以降にしてください</div>`; return; }
+  const { data } = await sb.from("bookings").select("room_id,user_id,starts_at,ends_at, profiles(display_name)")
+    .gte("starts_at", start.toISOString()).lt("starts_at", end.toISOString());
+  const rows=data||[];
+  if(!rows.length){ out.innerHTML=`<div class="hint">この期間の予約はありません。</div>`; return; }
+  const hrs=b=>(new Date(b.ends_at)-new Date(b.starts_at))/3600000;
+  const totalCount=rows.length, totalHrs=rows.reduce((s,b)=>s+hrs(b),0);
+  const byRoom={}, byUser={}, byUR={};
+  for(const b of rows){
+    const rn=(roomById(b.room_id)||{}).name||"(不明)"; const un=b.profiles?.display_name||"(不明)";
+    (byRoom[rn]=byRoom[rn]||{c:0,h:0}); byRoom[rn].c++; byRoom[rn].h+=hrs(b);
+    (byUser[un]=byUser[un]||{c:0,h:0}); byUser[un].c++; byUser[un].h+=hrs(b);
+    const k=un+" / "+rn; (byUR[k]=byUR[k]||{u:un,rn,c:0,h:0}); byUR[k].c++; byUR[k].h+=hrs(b);
+  }
+  const bars=obj=>{ const arr=Object.entries(obj).map(([k,v])=>({k,...v})).sort((a,b)=>b.h-a.h); const max=Math.max(...arr.map(x=>x.h),1);
+    return arr.map(x=>`<div class="rp-row"><div class="rp-k">${esc(x.k)}</div><div class="rp-bar"><div style="width:${(x.h/max*100).toFixed(1)}%"></div></div><div class="rp-v">${x.c}件 / ${x.h.toFixed(1)}h</div></div>`).join(""); };
+  const urRows=Object.values(byUR).sort((a,b)=>b.h-a.h).map(x=>`<tr><td>${esc(x.u)}</td><td>${esc(x.rn)}</td><td style="text-align:right">${x.c}</td><td style="text-align:right">${x.h.toFixed(1)}</td></tr>`).join("");
+  out.innerHTML =
+    `<div class="rp-kpi">合計 <b>${totalCount}</b> 件 ・ <b>${totalHrs.toFixed(1)}</b> 時間</div>`
+    +`<h3 class="rp-h">会議室別</h3>${bars(byRoom)}`
+    +`<h3 class="rp-h">利用者別</h3>${bars(byUser)}`
+    +`<h3 class="rp-h">利用者 × 会議室</h3><table class="rp-t"><thead><tr><th>利用者</th><th>会議室</th><th style="text-align:right">件数</th><th style="text-align:right">時間</th></tr></thead><tbody>${urRows}</tbody></table>`;
+}
 /* ---------- settings ---------- */
 function openSettings(){ $("stName").value=S.profile.display_name||""; $("stMsg").textContent=""; show("stView"); }
 

@@ -179,7 +179,39 @@ do $$ declare rid uuid; begin
   insert into _t values(22,'分単位でも枠超過は拒否','NG: 通ってしまった');
 exception when others then insert into _t values(22,'分単位でも枠超過は拒否','OK(正しく拒否)'); end $$;
 
+-- ===== 利用集計(追加仕様) の下ごしらえ: 会議室10 に alice2件/bob1件 =====
+do $$ declare rid uuid; begin
+  select id into rid from public.rooms where bookable_start_time is null order by sort_order desc limit 1; -- 会議室10
+  perform set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+  insert into public.bookings(room_id,user_id,starts_at,ends_at) values
+   (rid,'11111111-1111-1111-1111-111111111111',(current_date+time '09:00') at time zone 'Asia/Tokyo',(current_date+time '09:30') at time zone 'Asia/Tokyo'),
+   (rid,'11111111-1111-1111-1111-111111111111',(current_date+time '15:00') at time zone 'Asia/Tokyo',(current_date+time '16:00') at time zone 'Asia/Tokyo');
+  perform set_config('request.jwt.claims','{"sub":"22222222-2222-2222-2222-222222222222","role":"authenticated"}', true);
+  insert into public.bookings(room_id,user_id,starts_at,ends_at) values
+   (rid,'22222222-2222-2222-2222-222222222222',(current_date+time '17:00') at time zone 'Asia/Tokyo',(current_date+time '17:30') at time zone 'Asia/Tokyo');
+end $$;
+
+-- 会議室別の利用集計: 会議室10 = 3件 / 2.0h
+do $$ declare rid uuid; c int; hrs numeric; begin
+  perform set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+  select id into rid from public.rooms where bookable_start_time is null order by sort_order desc limit 1;
+  select count(*), round(sum(extract(epoch from (ends_at-starts_at))/3600)::numeric,2) into c,hrs
+    from public.bookings where room_id=rid;
+  if c=3 and hrs=2.00 then insert into _t values(23,'会議室別の利用集計(件数・時間)','OK');
+  else insert into _t values(23,'会議室別の利用集計(件数・時間)', format('NG (件数=%s, 時間=%s)',c,hrs)); end if;
+end $$;
+
+-- 利用者別の利用集計: 会議室10のalice = 2件 / 1.5h
+do $$ declare rid uuid; c int; hrs numeric; begin
+  perform set_config('request.jwt.claims','{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+  select id into rid from public.rooms where bookable_start_time is null order by sort_order desc limit 1;
+  select count(*), round(sum(extract(epoch from (ends_at-starts_at))/3600)::numeric,2) into c,hrs
+    from public.bookings where room_id=rid and user_id='11111111-1111-1111-1111-111111111111';
+  if c=2 and hrs=1.50 then insert into _t values(24,'利用者別の利用集計(件数・時間)','OK');
+  else insert into _t values(24,'利用者別の利用集計(件数・時間)', format('NG (件数=%s, 時間=%s)',c,hrs)); end if;
+end $$;
+
 reset role;
 select seq, label, result from _t order by seq;
 rollback;
--- 期待: 全22項目が OK / OK(正しく拒否)
+-- 期待: 全24項目が OK / OK(正しく拒否)
