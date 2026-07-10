@@ -172,6 +172,9 @@
     <h2>お名前を入力してください</h2>
     <p class="hint" style="margin-bottom:14px">予約の予約者名になります。あとで設定から変更できます。</p>
     <label class="fld"><span>氏名</span><input id="nmInput" type="text" placeholder="山田太郎"></label>
+    <label class="fld"><span>所属部門（通知先グループ）</span>
+      <select id="nmDivision"><option value="">（未選択：既定グループ）</option></select>
+    </label>
     <button class="btn block" onclick="saveName()">はじめる</button>
     <div id="nmMsg" class="msg"></div>
   </div>
@@ -309,6 +312,9 @@
     <button class="closex" onclick="closeModal('stView')" aria-label="閉じる">×</button>
     <h2>設定</h2>
     <label class="fld"><span>氏名（表示名）</span><input id="stName" type="text"></label>
+    <label class="fld"><span>所属部門（通知先グループ）</span>
+      <select id="stDivision"><option value="">（未選択：既定グループ）</option></select>
+    </label>
     <button class="btn" onclick="saveName(true)">氏名を保存</button>
     <div id="stMsg" class="msg"></div>
     <button id="btnSys" class="btn ghost block hidden" style="margin-top:14px" onclick="closeModal('stView');openSys()">システム設定</button>
@@ -388,13 +394,13 @@ function mapAuthError(m){ m=m||"";
 async function logout(){ await sb.auth.signOut(); location.reload(); }
 
 async function loadProfile(){
-  const { data } = await sb.from("profiles").select("id,display_name,is_admin").eq("id",S.user.id).maybeSingle();
+  const { data } = await sb.from("profiles").select("id,display_name,is_admin,division").eq("id",S.user.id).maybeSingle();
   if(!data){ await sb.from("profiles").insert({ id:S.user.id }); S.profile={ id:S.user.id, display_name:null, is_admin:false }; }
   else S.profile=data;
 }
 async function route(){
   hide("authView");
-  if(!S.profile.display_name){ show("nameView"); $("nmInput").focus(); return; }
+  if(!S.profile.display_name){ await fillDivisions("nmDivision", S.profile.division, "選択してください"); show("nameView"); $("nmInput").focus(); return; }
   hide("nameView"); show("appView");
   $("whoLabel").textContent = S.profile.display_name + (S.profile.is_admin?"（管理者）":"");
   $("btnReport").classList.toggle("hidden", !S.profile.is_admin);
@@ -405,9 +411,17 @@ async function saveName(fromSettings){
   const inp = fromSettings? $("stName"):$("nmInput"); const name = inp.value.trim();
   const msg = fromSettings? $("stMsg"):$("nmMsg"); msg.className="msg";
   if(!name){ msg.className="msg err"; msg.textContent="氏名を入力してください"; return; }
-  const { error } = await sb.from("profiles").update({ display_name:name }).eq("id",S.user.id);
+  const upd = { display_name:name };
+  const divSel = fromSettings? $("stDivision") : $("nmDivision");
+  // 登録時は所属部門を必須（部門が1件以上登録されている場合のみ強制）。設定画面は任意のまま。
+  if(!fromSettings && S.divisionsFeature && divSel.options.length>1 && !divSel.value){
+    msg.className="msg err"; msg.textContent="所属部門を選択してください"; return;
+  }
+  if(S.divisionsFeature) upd.division = divSel.value || null;
+  const { error } = await sb.from("profiles").update(upd).eq("id",S.user.id);
   if(error){ msg.className="msg err"; msg.textContent="保存に失敗しました: "+error.message; return; }
   S.profile.display_name=name;
+  if(S.divisionsFeature) S.profile.division = upd.division;
   if(fromSettings){ msg.className="msg ok"; msg.textContent="保存しました（過去予約の予約者名も更新されます）"; $("whoLabel").textContent=name+(S.profile.is_admin?"（管理者）":""); await reload(); }
   else route();
 }
@@ -872,7 +886,16 @@ async function addRoom(){
   await loadRooms(); buildWeekRoomSelect(); renderSysList(); reload();
 }
 
-function openSettings(){ $("stName").value=S.profile.display_name||""; $("stMsg").textContent=""; $("btnSys").classList.toggle("hidden", !S.profile.is_admin); show("stView"); }
+async function openSettings(){ $("stName").value=S.profile.display_name||""; $("stMsg").textContent=""; $("btnSys").classList.toggle("hidden", !S.profile.is_admin); await fillDivisions("stDivision", S.profile.division); show("stView"); }
+async function fillDivisions(selId, current, placeholder){
+  const sel=$(selId), fld=sel.closest("label"); let list=[]; S.divisionsFeature=false;
+  try{ const { data, error } = await sb.rpc("list_divisions"); if(!error){ S.divisionsFeature=true; list=data||[]; } }
+  catch(e){ /* 08未適用時 */ }
+  if(fld) fld.classList.toggle("hidden", list.length===0);   // 部門が無ければ欄を隠す
+  let opts=`<option value="">${placeholder||"（未選択：既定グループ）"}</option>`;
+  list.forEach(d=>{ opts+=`<option value="${esc(d.division_key)}">${esc(d.label)}</option>`; });
+  sel.innerHTML=opts; sel.value = current || "";
+}
 
 function subscribeRealtime(){
   try{ sb.channel("rt-bookings").on("postgres_changes",{event:"*",schema:"public",table:"bookings"},()=>reload()).subscribe(); }catch(e){}
