@@ -95,6 +95,30 @@
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .chip{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:3px 8px;font-size:12px;display:flex;align-items:center;gap:6px}
   .chip button{background:transparent;border:0;color:var(--muted);font-size:13px;padding:0;line-height:1}
+  .tcombo{position:relative}
+  .tcombo-list{position:absolute;left:0;right:0;top:100%;margin-top:4px;z-index:60;background:var(--panel2);border:1px solid var(--line);border-radius:9px;max-height:184px;overflow:auto;display:none;box-shadow:0 12px 32px rgba(0,0,0,.45)}
+  .tcombo-list.show{display:block}
+  .tcombo-opt{padding:9px 12px;font-size:14px;cursor:pointer;white-space:nowrap}
+  .tcombo-opt:hover{background:var(--accent);color:#fff}
+  .lay-area{border:1px solid var(--line);border-radius:12px;padding:12px;background:rgba(255,255,255,.02);margin-bottom:16px}
+  .lay-area-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+  .lay-area-h b{font-size:15px}
+  .lay-grid{position:relative;display:grid;gap:10px}
+  .lay-cell{min-height:62px;border-radius:10px;border:1px dashed transparent;position:relative;z-index:1}
+  .lay-cell.empty{border-color:var(--line);background:rgba(255,255,255,.02)}
+  .lay-editing .lay-cell.empty{cursor:pointer}
+  .lay-editing .lay-cell.empty:hover{border-color:var(--accent);background:rgba(238,83,64,.08)}
+  .lay-booth{min-height:62px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:var(--panel2);border:2px solid transparent;cursor:pointer;padding:6px;text-align:center;position:relative;z-index:1}
+  .lay-booth b{font-size:20px;line-height:1}
+  .lay-booth small{font-size:10px;color:var(--muted)}
+  .lay-booth.sel{border-color:var(--accent);box-shadow:0 0 0 3px rgba(238,83,64,.28)}
+  .lay-table{position:absolute;left:12%;right:12%;top:50%;transform:translateY(-50%);height:42%;border:2px solid var(--line);border-radius:14px;background:rgba(255,255,255,.03);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;pointer-events:none;z-index:0}
+  .lay-btns{display:flex;gap:6px;flex-wrap:wrap}
+  .lay-btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 11px;font-size:12px;cursor:pointer}
+  .lay-btn:hover{border-color:var(--accent)}
+  .lay-unplaced{display:flex;flex-wrap:wrap;gap:8px}
+  .lay-chip{background:var(--panel2);border:2px solid transparent;border-radius:9px;padding:7px 11px;font-size:13px;cursor:pointer}
+  .lay-chip.sel{border-color:var(--accent);box-shadow:0 0 0 3px rgba(238,83,64,.28)}
   .modal .actions{display:flex;gap:10px;margin-top:20px}
   .hint{color:var(--muted);font-size:12px;margin-top:4px}
   .list{display:flex;flex-direction:column;gap:8px;margin-top:6px}
@@ -187,13 +211,23 @@
     <div id="bkHint" class="hint"></div>
     <label class="fld"><span>日付</span><input id="bkDate" type="date"></label>
     <div class="row2">
-      <label class="fld"><span>開始</span><input id="bkStart" type="time" step="60"></label>
-      <label class="fld"><span>終了</span><input id="bkEnd" type="time" step="60"></label>
+      <label class="fld"><span>開始</span><div class="tcombo"><input id="bkStart" type="text" inputmode="numeric" autocomplete="off" placeholder="例 14:30"><div id="bkStartList" class="tcombo-list"></div></div></label>
+      <label class="fld"><span>終了</span><div class="tcombo"><input id="bkEnd" type="text" inputmode="numeric" autocomplete="off" placeholder="例 15:00"><div id="bkEndList" class="tcombo-list"></div></div></label>
     </div>
     <label class="fld"><span>件名（任意）</span><input id="bkSubject" type="text" placeholder="例: 定例MTG"></label>
-    <label class="fld"><span>参加者（任意・Enterで追加）</span>
-      <input id="bkPartInput" type="text" list="nameOptions" placeholder="氏名を入力してEnter">
-      <datalist id="nameOptions"></datalist>
+    <label class="fld"><span>通知（メール）</span>
+      <select id="bkNotify">
+        <option value="">通知しない</option>
+        <option value="5">開始 5分前</option>
+        <option value="10">開始 10分前</option>
+        <option value="15">開始 15分前</option>
+        <option value="30">開始 30分前</option>
+        <option value="60">開始 60分前</option>
+      </select>
+    </label>
+    <div class="hint">通知は予約者（ログイン中のあなた）のメールアドレスに送信されます。</div>
+    <label class="fld"><span>参加者（氏名で検索・Enterで追加）</span>
+      <div class="tcombo"><input id="bkPartInput" type="text" autocomplete="off" placeholder="氏名を入力（登録済みから検索）"><div id="bkPartList" class="tcombo-list"></div></div>
     </label>
     <div id="bkChips" class="chips"></div>
     <div id="bkMsg" class="msg"></div>
@@ -241,7 +275,7 @@
 </div>
 
 <div id="placeView" class="overlay hidden">
-  <div class="modal" style="max-width:600px">
+  <div class="modal" style="max-width:760px">
     <button class="closex" onclick="closeModal('placeView')" aria-label="閉じる">×</button>
     <h2>会議ブース場所</h2>
     <div id="placeOut"></div>
@@ -266,7 +300,7 @@
       </div>
     </div>
     <div id="sysMsg" class="msg"></div>
-    <div class="hint" style="margin-top:12px;padding:10px;border:1px dashed var(--line);border-radius:8px">会議ブース場所のレイアウト編集は、共有いただくレイアウト画像をもとに追加実装します。</div>
+    <div class="hint" style="margin-top:12px;padding:10px;border:1px dashed var(--line);border-radius:8px">配置図（レイアウト）の編集は「会議ブース場所」画面 →「レイアウトを編集」から行えます（管理者のみ）。</div>
   </div>
 </div>
 
@@ -506,8 +540,7 @@ function buildWeekRoomSelect(){ const sel=$("weekRoom"); sel.innerHTML=S.rooms.m
 function openBooking(id, prefill){
   S.editId=id; S.chips=[]; const msg=$("bkMsg"); msg.className="msg"; msg.textContent="";
   $("bkRoom").innerHTML=S.rooms.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join("");
-  $("nameOptions").innerHTML=S.names.map(n=>`<option value="${esc(n)}">`).join("");
-  $("bkStart").value="10:00"; $("bkEnd").value="11:00";
+  $("bkStart").value="10:00"; $("bkEnd").value="11:00"; $("bkNotify").value="";
   $("bkDelete").classList.add("hidden");
   if(id){
     const b=S.bookings.find(x=>x.id===id); if(!b)return;
@@ -517,13 +550,14 @@ function openBooking(id, prefill){
     $("bkRoom").value=b.room_id; $("bkDate").value=ymd(new Date(b.starts_at));
     $("bkStart").value=hm(new Date(b.starts_at)); $("bkEnd").value=hm(new Date(b.ends_at));
     $("bkSubject").value=b.title||""; S.chips=[...(b.participants||[])];
-    [$("bkRoom"),$("bkDate"),$("bkStart"),$("bkEnd"),$("bkSubject"),$("bkPartInput")].forEach(el=>el.disabled=!canEdit);
+    $("bkNotify").value = (b.notify_before_min!=null? String(b.notify_before_min):"");
+    [$("bkRoom"),$("bkDate"),$("bkStart"),$("bkEnd"),$("bkSubject"),$("bkPartInput"),$("bkNotify")].forEach(el=>el.disabled=!canEdit);
     $("bkSave").classList.toggle("hidden",!canEdit);
     $("bkDelete").classList.toggle("hidden",!canDelete);
   }else{
     $("bkTitle").textContent="新規予約"; $("bkSubject").value="";
     $("bkOrganizer").textContent = S.profile.display_name || "";
-    [$("bkRoom"),$("bkDate"),$("bkStart"),$("bkEnd"),$("bkSubject"),$("bkPartInput")].forEach(el=>el.disabled=false);
+    [$("bkRoom"),$("bkDate"),$("bkStart"),$("bkEnd"),$("bkSubject"),$("bkPartInput"),$("bkNotify")].forEach(el=>el.disabled=false);
     $("bkSave").classList.remove("hidden");
     if(prefill){ $("bkRoom").value=prefill.room; $("bkDate").value=prefill.date;
       $("bkStart").value=prefill.start;
@@ -534,28 +568,83 @@ function openBooking(id, prefill){
   $("bkPartInput").value=""; renderChips(); bkRoomHint(); show("bkView");
 }
 function bkRoomHint(){ const r=roomById($("bkRoom").value);
-  if(isLimited(r)){ const ws=hhmmShort(r.bookable_start_time), we=hhmmShort(r.bookable_end_time);
-    $("bkHint").textContent=`この会議ブースは ${ws}〜${we} のみ予約できます`;
-    $("bkStart").min=ws; $("bkStart").max=we; $("bkEnd").min=ws; $("bkEnd").max=we;
-  } else { $("bkHint").textContent=""; ["bkStart","bkEnd"].forEach(id=>{ $(id).removeAttribute("min"); $(id).removeAttribute("max"); }); }
+  $("bkHint").textContent = isLimited(r)? `この会議ブースは ${hhmmShort(r.bookable_start_time)}〜${hhmmShort(r.bookable_end_time)} のみ予約できます`:"";
+}
+// ---- 時刻コンボ(30分候補+自由入力) / 参加者リアルタイム検索 ----
+function buildTimeMarks(room){
+  let lo, hi;
+  if(isLimited(room)){ lo=hmToMin(room.bookable_start_time); hi=hmToMin(room.bookable_end_time); }
+  else { lo=START_H*60; hi=END_H*60-30; }
+  const out=[]; for(let m=Math.ceil(lo/30)*30; m<=hi; m+=30) out.push(pad(Math.floor(m/60))+":"+pad(m%60));
+  return out;
+}
+function validHM(v){ return /^([01]?\d|2[0-3]):[0-5]\d$/.test((v||"").trim()); }
+function normalizeTime(v){ v=(v||"").trim(); let m=v.match(/^(\d{1,2}):(\d{1,2})$/);
+  if(m) return pad(Math.min(23,+m[1]))+":"+pad(Math.min(59,+m[2]));
+  m=v.match(/^(\d{1,2})(\d{2})$/); if(m) return pad(Math.min(23,+m[1]))+":"+pad(Math.min(59,+m[2]));
+  if(/^\d{1,2}$/.test(v)) return pad(Math.min(23,+v))+":00";
+  return v;
+}
+function filterNames(names, query, exclude){ const q=(query||"").trim().toLowerCase(); const ex=new Set(exclude||[]);
+  return (names||[]).filter(n=> !ex.has(n) && (q==="" || String(n).toLowerCase().includes(q))); }
+function renderTimeOpts(inp, list){
+  const marks=buildTimeMarks(roomById($("bkRoom").value));
+  const q=inp.value.trim().replace(/[^\d:]/g,"");
+  let show = q? marks.filter(m=> m.startsWith(q) || m.replace(":","").startsWith(q.replace(":",""))) : marks;
+  if(!show.length) show=marks;
+  list.innerHTML = show.map(m=>`<div class="tcombo-opt" data-v="${m}">${m}</div>`).join("");
+}
+function setupTimeCombo(inpId, listId){
+  const inp=$(inpId), list=$(listId);
+  const openList=()=>{ if(inp.disabled) return; renderTimeOpts(inp,list); list.classList.add("show"); };
+  inp.addEventListener("focus", openList);
+  inp.addEventListener("click", openList);
+  inp.addEventListener("input", openList);
+  inp.addEventListener("blur", ()=>{ setTimeout(()=>list.classList.remove("show"),150); inp.value=normalizeTime(inp.value); });
+  list.addEventListener("pointerdown", e=>{ const o=e.target.closest(".tcombo-opt"); if(!o) return; e.preventDefault(); inp.value=o.dataset.v; list.classList.remove("show"); });
+}
+function renderPartOpts(inp, list){
+  const opts=filterNames(S.names, inp.value, S.chips).slice(0,50);
+  list.innerHTML = opts.length? opts.map(n=>`<div class="tcombo-opt" data-v="${esc(n)}">${esc(n)}</div>`).join("")
+    : `<div class="tcombo-opt" style="opacity:.55;pointer-events:none">該当なし（Enterで自由入力）</div>`;
+}
+function addChip(v){ v=(v||"").trim(); if(v&&!S.chips.includes(v)){ S.chips.push(v); renderChips(); } }
+function setupPartCombo(){
+  const inp=$("bkPartInput"), list=$("bkPartList");
+  const openList=()=>{ if(inp.disabled) return; renderPartOpts(inp,list); list.classList.add("show"); };
+  inp.addEventListener("focus", openList);
+  inp.addEventListener("input", openList);
+  inp.addEventListener("blur", ()=> setTimeout(()=>list.classList.remove("show"),150));
+  inp.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===","){ e.preventDefault(); addChip(inp.value); inp.value=""; renderPartOpts(inp,list); } });
+  list.addEventListener("pointerdown", e=>{ const o=e.target.closest(".tcombo-opt"); if(!o) return; e.preventDefault(); addChip(o.dataset.v); inp.value=""; renderPartOpts(inp,list); });
 }
 function renderChips(){ $("bkChips").innerHTML=S.chips.map((c,i)=>`<span class="chip">${esc(c)}<button onclick="rmChip(${i})" aria-label="削除">×</button></span>`).join(""); }
 function rmChip(i){ S.chips.splice(i,1); renderChips(); }
-$("bkPartInput").addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===","){ e.preventDefault(); const v=e.target.value.trim(); if(v&&!S.chips.includes(v)){ S.chips.push(v); renderChips(); } e.target.value=""; } });
+setupTimeCombo("bkStart","bkStartList"); setupTimeCombo("bkEnd","bkEndList"); setupPartCombo();
+$("placeOut").addEventListener("click", e=>{
+  const gb=e.target.closest("[data-grow]"); if(gb){ const [a,d]=gb.dataset.grow.split("|"); layGrow(a,d); return; }
+  const bo=e.target.closest("[data-booth]"); if(bo){ layTapBooth(bo.dataset.booth); return; }
+  const ce=e.target.closest("[data-cell]"); if(ce){ const p=ce.dataset.cell.split("|"); layTapCell(p[0], +p[1], +p[2]); return; }
+});
 
 async function saveBooking(){
   const msg=$("bkMsg"); msg.className="msg"; msg.textContent="";
-  const rid=$("bkRoom").value, date=$("bkDate").value, st=$("bkStart").value, et=$("bkEnd").value;
+  const rid=$("bkRoom").value, date=$("bkDate").value;
+  let st=normalizeTime($("bkStart").value), et=normalizeTime($("bkEnd").value);
+  $("bkStart").value=st; $("bkEnd").value=et;
   if(!rid||!date||!st||!et){ msg.className="msg err"; msg.textContent="会議ブース・日付・時間を入力してください"; return; }
+  if(!validHM(st)||!validHM(et)){ msg.className="msg err"; msg.textContent="時刻は HH:MM 形式（例 14:30）で入力してください"; return; }
   const r=roomById(rid);
   if(isLimited(r)){ const ws=hhmmShort(r.bookable_start_time), we=hhmmShort(r.bookable_end_time);
     if(st<ws||et>we){ msg.className="msg err"; msg.textContent=`この会議ブースは ${ws}〜${we} のみ予約できます`; return; } }
-  const pend=$("bkPartInput").value.trim(); if(pend&&!S.chips.includes(pend)) S.chips.push(pend);
+  addChip($("bkPartInput").value); $("bkPartInput").value="";
+  const nb=$("bkNotify").value;
   const [y,mo,da]=date.split("-").map(Number); const [sh,sm]=st.split(":").map(Number); const [eh,em]=et.split(":").map(Number);
   const starts=atLocal(y,mo-1,da,sh,sm), ends=atLocal(y,mo-1,da,eh,em);
   if(ends<=starts){ msg.className="msg err"; msg.textContent="終了は開始より後にしてください"; return; }
   const payload={ room_id:rid, user_id:S.user.id, title:$("bkSubject").value.trim()||null,
-    participants:S.chips, starts_at:starts.toISOString(), ends_at:ends.toISOString() };
+    participants:S.chips, starts_at:starts.toISOString(), ends_at:ends.toISOString(),
+    notify_before_min: nb? parseInt(nb,10):null, notify_sent_at:null };
   $("bkSave").disabled=true;
   try{
     let res;
@@ -647,16 +736,87 @@ async function runReport(){
     +`<h3 class="rp-h">利用者 × 会議ブース</h3><table class="rp-t"><thead><tr><th>利用者</th><th>会議ブース</th><th style="text-align:right">件数</th><th style="text-align:right">時間</th></tr></thead><tbody>${urRows}</tbody></table>`;
 }
 
+// ===== 会議ブース場所（レイアウト図 / 管理者のみ編集可） =====
+function layGridSize(rooms, area, minRows, minCols){
+  let r=minRows||1, c=minCols||1;
+  rooms.forEach(x=>{ if(x.area===area && x.row){ if(x.row>r)r=x.row; if(x.col>c)c=x.col; } });
+  return { rows:r, cols:c };
+}
+function layAt(rooms, area, r, c){ return rooms.find(x=>x.area===area && x.row===r && x.col===c) || null; }
+function layMove(rooms, id, area, r, c){
+  const arr=rooms.map(x=>({...x}));
+  const src=arr.find(x=>x.id===id); if(!src) return arr;
+  const dst=arr.find(x=>x.id!==id && x.area===area && x.row===r && x.col===c);
+  if(dst){ dst.area=src.area; dst.row=src.row; dst.col=src.col; }   // 入替
+  src.area=area; src.row=r; src.col=c;
+  return arr;
+}
+function layAreas(rooms){ const seen=[]; rooms.forEach(x=>{ if(!seen.includes(x.area)) seen.push(x.area); }); return seen; }
+
 function openPlace(){
-  const groups={};
-  for(const r of S.rooms){ const loc=r.location||"（場所未設定）"; (groups[loc]=groups[loc]||[]).push(r); }
-  let h='<p class="hint" style="margin-bottom:12px">会議ブースの場所一覧です。マップ（レイアウト図）は共有いただく画像をもとに追加予定です。</p>';
-  for(const [loc,arr] of Object.entries(groups)){
-    h+=`<h3 class="rp-h">${esc(loc)}</h3><div class="place-grid">`;
-    h+=arr.map(r=>`<div class="place-card" style="border-left:4px solid ${r.color}"><b>${esc(r.name)}</b>${isLimited(r)?`<small>${hhmmShort(r.bookable_start_time)}〜${hhmmShort(r.bookable_end_time)}のみ</small>`:""}</div>`).join("");
+  S.layRooms = S.rooms.map(r=>({ id:r.id, no:r.sort_order, name:r.name, limited:isLimited(r),
+    area:(r.location&&r.location.trim())||"未設定", row:r.layout_row||null, col:r.layout_col||null }));
+  S.layExtra={}; S.laySel=null; S.layEditing=false; renderPlace();
+}
+function toggleLayEdit(){ S.layEditing=!S.layEditing; S.laySel=null; renderPlace(); }
+function layGrow(area, dim){ S.layExtra[area]=S.layExtra[area]||{rows:0,cols:0}; S.layExtra[area][dim]++; renderPlace(); }
+function layAddArea(){ const n=(prompt("追加するエリア名（例: 3F会議室）")||"").trim(); if(!n)return; S.layExtra[n]=S.layExtra[n]||{rows:2,cols:2}; renderPlace(); }
+function layReset(){ openPlace(); }
+function layTapBooth(id){
+  if(!S.layEditing){ closeModal("placeView"); openBooking(null,{room:id,date:ymd(S.date),start:"10:00",end:"11:00"}); return; }
+  if(!S.laySel){ S.laySel=id; renderPlace(); return; }
+  if(S.laySel===id){ S.laySel=null; renderPlace(); return; }
+  const tgt=S.layRooms.find(x=>x.id===id);
+  S.layRooms=layMove(S.layRooms, S.laySel, tgt.area, tgt.row, tgt.col);
+  S.laySel=null; renderPlace();
+}
+function layTapCell(area, r, c){
+  if(!S.layEditing || !S.laySel) return;
+  S.layRooms=layMove(S.layRooms, S.laySel, area, r, c);
+  S.laySel=null; renderPlace();
+}
+function renderPlace(){
+  const admin = S.profile && S.profile.is_admin;
+  const areas = layAreas(S.layRooms).filter(a=>a!=="未設定");
+  Object.keys(S.layExtra).forEach(a=>{ if(a!=="未設定" && !areas.includes(a)) areas.push(a); });
+  let h="";
+  if(admin){
+    h+=`<div class="lay-btns" style="margin-bottom:12px"><button class="lay-btn" onclick="toggleLayEdit()">${S.layEditing?"編集を終了":"レイアウトを編集"}</button>`;
+    if(S.layEditing) h+=`<button class="lay-btn" onclick="layAddArea()">＋エリア</button><button class="lay-btn" onclick="layReset()">リセット</button><button class="lay-btn" style="border-color:var(--accent);color:var(--accent)" onclick="saveLayout()">保存</button>`;
     h+=`</div>`;
+    h+=`<p class="hint" style="margin-bottom:12px">${S.layEditing?"ブース／チップをタップして選択 → 空きマスや別のブースをタップで移動・入替。行/列・エリアも追加できます。":"配置図です。編集するには「レイアウトを編集」を押してください。"}</p>`;
+  } else {
+    h+=`<p class="hint" style="margin-bottom:12px">会議ブースの配置図です。ブースをタップするとその場所で予約できます。</p>`;
+  }
+  for(const area of areas){
+    const ex=S.layExtra[area]||{rows:0,cols:0}, sz=layGridSize(S.layRooms, area, 1, 1);
+    const rows=Math.max(sz.rows, ex.rows||0, 1), cols=Math.max(sz.cols, ex.cols||0, 1);
+    h+=`<div class="lay-area"><div class="lay-area-h"><b>${esc(area)}</b>`;
+    if(admin&&S.layEditing) h+=`<span class="lay-btns"><button class="lay-btn" data-grow="${esc(area)}|rows">行＋</button><button class="lay-btn" data-grow="${esc(area)}|cols">列＋</button></span>`;
+    h+=`</div><div class="lay-grid${S.layEditing?" lay-editing":""}" style="grid-template-columns:repeat(${cols},minmax(56px,1fr))">`;
+    if(area==="マリージョア") h+=`<div class="lay-table">テーブル</div>`;
+    for(let r=1;r<=rows;r++) for(let c=1;c<=cols;c++){
+      const b=layAt(S.layRooms, area, r, c);
+      if(b) h+=`<div class="lay-booth${S.laySel===b.id?" sel":""}" data-booth="${b.id}" title="${esc(b.name)}"><b>${b.no}</b>${b.limited?"<small>10-11のみ</small>":""}</div>`;
+      else h+=`<div class="lay-cell empty" data-cell="${esc(area)}|${r}|${c}"></div>`;
+    }
+    h+=`</div></div>`;
+  }
+  const un=S.layRooms.filter(x=>!x.row||!x.col);
+  if(un.length){
+    h+=`<div class="lay-area"><div class="lay-area-h"><b>未配置</b></div><div class="lay-unplaced">`;
+    h+=un.map(b=>`<div class="lay-chip${S.laySel===b.id?" sel":""}" data-booth="${b.id}"><b>${b.no}</b> ${esc(b.name)}</div>`).join("");
+    h+=`</div>${(admin&&S.layEditing)?'<p class="hint" style="margin-top:8px">チップをタップして選択 → 配置したいマスをタップ</p>':""}</div>`;
   }
   $("placeOut").innerHTML=h; show("placeView");
+}
+async function saveLayout(){
+  try{
+    const ups=S.layRooms.map(b=> sb.from("rooms").update({ location:(b.area==="未設定"?null:b.area), layout_row:b.row, layout_col:b.col }).eq("id",b.id));
+    const results=await Promise.all(ups);
+    const bad=results.find(r=>r.error); if(bad) throw bad.error;
+    await reload(); openPlace(); alert("レイアウトを保存しました");
+  }catch(e){ alert(mapRoomError(e)); }
 }
 
 function openSys(){ if(!S.profile.is_admin) return; renderSysList(); $("sysAddName").value=""; $("sysAddLoc").value=""; $("sysAddLimited").checked=false; syncLimInputs($("sysAddLimited")); $("sysMsg").textContent=""; show("sysView"); }
@@ -673,6 +833,7 @@ function renderSysList(){
 }
 function mapRoomError(error, zero){
   const m=error? (error.message||""):"";
+  if(/layout_row|layout_col/i.test(m)) return "DB未更新の可能性。先に 06_layout.sql を実行してください（詳細: "+m+"）";
   if(/location|organizer_name|does not exist|schema cache|column/i.test(m)) return "DB未更新の可能性。先に 03_booths_upgrade.sql を実行してください（詳細: "+m+"）";
   if(zero || /row-level security|permission denied|not allowed/i.test(m)) return "権限がありません。管理者権限、または 03_booths_upgrade.sql の適用をご確認ください"+(m?"（詳細: "+m+"）":"");
   return "失敗しました: "+(m||"不明なエラー");
