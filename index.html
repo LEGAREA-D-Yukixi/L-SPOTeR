@@ -314,6 +314,7 @@
     <button id="btnSys" class="btn ghost block hidden" style="margin-top:14px" onclick="closeModal('stView');openSys()">システム設定</button>
     <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
     <button class="btn ghost block" onclick="logout()">ログアウト</button>
+    <div class="hint" id="buildTag" style="margin-top:14px;text-align:center;opacity:.5"></div>
   </div>
 </div>
 
@@ -327,6 +328,8 @@ const S = { user:null, profile:null, rooms:[], bookings:[], view:"day", date:new
 let drag=null;
 
 const $ = id => document.getElementById(id);
+const BUILD = "2026-07-10-01";
+console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const hm = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -621,6 +624,7 @@ function setupPartCombo(){
 function renderChips(){ $("bkChips").innerHTML=S.chips.map((c,i)=>`<span class="chip">${esc(c)}<button onclick="rmChip(${i})" aria-label="削除">×</button></span>`).join(""); }
 function rmChip(i){ S.chips.splice(i,1); renderChips(); }
 setupTimeCombo("bkStart","bkStartList"); setupTimeCombo("bkEnd","bkEndList"); setupPartCombo();
+$("buildTag").textContent = "build " + BUILD;
 $("placeOut").addEventListener("click", e=>{
   const gb=e.target.closest("[data-grow]"); if(gb){ const [a,d]=gb.dataset.grow.split("|"); layGrow(a,d); return; }
   const bo=e.target.closest("[data-booth]"); if(bo){ layTapBooth(bo.dataset.booth); return; }
