@@ -228,7 +228,7 @@
         <option value="60">開始 60分前</option>
       </select>
     </label>
-    <div class="hint">通知は会議ブース通知用の Lark グループに送信されます（予約者名つき）。</div>
+    <div class="hint">通知は予約者と参加者本人へ Lark の個人DMで送信されます（参加者は候補から選んだ登録ユーザーが対象）。</div>
     <label class="fld"><span>参加者（氏名で検索・Enterで追加）</span>
       <div class="tcombo"><input id="bkPartInput" type="text" autocomplete="off" placeholder="氏名を入力（登録済みから検索）"><div id="bkPartList" class="tcombo-list"></div></div>
     </label>
@@ -334,7 +334,7 @@ const S = { user:null, profile:null, rooms:[], bookings:[], view:"day", date:new
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-10-01";
+const BUILD = "2026-07-13-01";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -394,9 +394,10 @@ function mapAuthError(m){ m=m||"";
 async function logout(){ await sb.auth.signOut(); location.reload(); }
 
 async function loadProfile(){
-  const { data } = await sb.from("profiles").select("id,display_name,is_admin,division").eq("id",S.user.id).maybeSingle();
-  if(!data){ await sb.from("profiles").insert({ id:S.user.id }); S.profile={ id:S.user.id, display_name:null, is_admin:false }; }
-  else S.profile=data;
+  let res = await sb.from("profiles").select("id,display_name,is_admin,division").eq("id",S.user.id).maybeSingle();
+  if(res.error){ res = await sb.from("profiles").select("id,display_name,is_admin").eq("id",S.user.id).maybeSingle(); }  // division列が無い環境でも動くようフォールバック（名前入力ループ防止）
+  if(!res.data){ await sb.from("profiles").insert({ id:S.user.id }); S.profile={ id:S.user.id, display_name:null, is_admin:false }; }
+  else S.profile=res.data;
 }
 async function route(){
   hide("authView");
