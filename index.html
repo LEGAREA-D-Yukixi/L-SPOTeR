@@ -429,8 +429,9 @@ async function saveName(fromSettings){
 async function loadRooms(){
   const { data } = await sb.from("rooms").select("*").eq("is_active",true).order("sort_order");
   S.rooms = data||[];
-  const { data:p } = await sb.from("profiles").select("display_name");
-  S.names = [...new Set((p||[]).map(x=>x.display_name).filter(Boolean))];
+  const { data:p } = await sb.from("profiles").select("id,display_name");
+  S.people = (p||[]).filter(x=>x.display_name).map(x=>({ id:x.id, name:x.display_name }));
+  S.names = [...new Set(S.people.map(x=>x.name))];
 }
 function viewRange(){ if(S.view==="day"){ const s=dayStart(S.date); return [s, addDays(s,1)]; } const s=weekStart(S.date); return [s, addDays(s,7)]; }
 async function loadBookings(){
@@ -566,7 +567,7 @@ function openBooking(id, prefill){
     $("bkOrganizer").textContent = b.organizer_name || "";
     $("bkRoom").value=b.room_id; $("bkDate").value=ymd(new Date(b.starts_at));
     $("bkStart").value=hm(new Date(b.starts_at)); $("bkEnd").value=hm(new Date(b.ends_at));
-    $("bkSubject").value=b.title||""; S.chips=[...(b.participants||[])];
+    $("bkSubject").value=b.title||""; S.chips=chipsFromBooking(b.participants, S.people);
     $("bkNotify").value = (b.notify_before_min!=null? String(b.notify_before_min):"");
     [$("bkRoom"),$("bkDate"),$("bkStart"),$("bkEnd"),$("bkSubject"),$("bkPartInput"),$("bkNotify")].forEach(el=>el.disabled=!canEdit);
     $("bkSave").classList.toggle("hidden",!canEdit);
@@ -602,8 +603,10 @@ function normalizeTime(v){ v=(v||"").trim(); let m=v.match(/^(\d{1,2}):(\d{1,2})
   if(/^\d{1,2}$/.test(v)) return pad(Math.min(23,+v))+":00";
   return v;
 }
-function filterNames(names, query, exclude){ const q=(query||"").trim().toLowerCase(); const ex=new Set(exclude||[]);
-  return (names||[]).filter(n=> !ex.has(n) && (q==="" || String(n).toLowerCase().includes(q))); }
+function filterPeople(people, query, takenNames){ const q=(query||"").trim().toLowerCase(); const ex=new Set(takenNames||[]);
+  return (people||[]).filter(p=> !ex.has(p.name) && (q==="" || String(p.name).toLowerCase().includes(q))); }
+function chipUserIds(chips){ return [...new Set((chips||[]).filter(c=>c.uid).map(c=>c.uid))]; }
+function chipsFromBooking(participants, people){ return (participants||[]).map(nm=>{ const p=(people||[]).find(x=>x.name===nm); return { name:nm, uid: p? p.id: null }; }); }
 function renderTimeOpts(inp, list){
   const marks=buildTimeMarks(roomById($("bkRoom").value));
   const q=inp.value.trim().replace(/[^\d:]/g,"");
@@ -621,21 +624,22 @@ function setupTimeCombo(inpId, listId){
   list.addEventListener("pointerdown", e=>{ const o=e.target.closest(".tcombo-opt"); if(!o) return; e.preventDefault(); inp.value=o.dataset.v; list.classList.remove("show"); });
 }
 function renderPartOpts(inp, list){
-  const opts=filterNames(S.names, inp.value, S.chips).slice(0,50);
-  list.innerHTML = opts.length? opts.map(n=>`<div class="tcombo-opt" data-v="${esc(n)}">${esc(n)}</div>`).join("")
-    : `<div class="tcombo-opt" style="opacity:.55;pointer-events:none">該当なし（Enterで自由入力）</div>`;
+  const taken=S.chips.map(c=>c.name);
+  const opts=filterPeople(S.people, inp.value, taken).slice(0,50);
+  list.innerHTML = opts.length? opts.map(p=>`<div class="tcombo-opt" data-v="${esc(p.name)}" data-uid="${p.id}">${esc(p.name)}</div>`).join("")
+    : `<div class="tcombo-opt" style="opacity:.55;pointer-events:none">該当なし（Enterで自由入力・通知対象外）</div>`;
 }
-function addChip(v){ v=(v||"").trim(); if(v&&!S.chips.includes(v)){ S.chips.push(v); renderChips(); } }
+function addChip(name, uid){ name=(name||"").trim(); if(name && !S.chips.some(c=>c.name===name)){ S.chips.push({ name, uid: uid||null }); renderChips(); } }
 function setupPartCombo(){
   const inp=$("bkPartInput"), list=$("bkPartList");
   const openList=()=>{ if(inp.disabled) return; renderPartOpts(inp,list); list.classList.add("show"); };
   inp.addEventListener("focus", openList);
   inp.addEventListener("input", openList);
   inp.addEventListener("blur", ()=> setTimeout(()=>list.classList.remove("show"),150));
-  inp.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===","){ e.preventDefault(); addChip(inp.value); inp.value=""; renderPartOpts(inp,list); } });
-  list.addEventListener("pointerdown", e=>{ const o=e.target.closest(".tcombo-opt"); if(!o) return; e.preventDefault(); addChip(o.dataset.v); inp.value=""; renderPartOpts(inp,list); });
+  inp.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===","){ e.preventDefault(); addChip(inp.value, null); inp.value=""; renderPartOpts(inp,list); } });
+  list.addEventListener("pointerdown", e=>{ const o=e.target.closest(".tcombo-opt"); if(!o) return; e.preventDefault(); addChip(o.dataset.v, o.dataset.uid); inp.value=""; renderPartOpts(inp,list); });
 }
-function renderChips(){ $("bkChips").innerHTML=S.chips.map((c,i)=>`<span class="chip">${esc(c)}<button onclick="rmChip(${i})" aria-label="削除">×</button></span>`).join(""); }
+function renderChips(){ $("bkChips").innerHTML=S.chips.map((c,i)=>`<span class="chip">${esc(c.name)}${c.uid?"":'<small style="opacity:.55;margin-left:4px">通知対象外</small>'}<button onclick="rmChip(${i})" aria-label="削除">×</button></span>`).join(""); }
 function rmChip(i){ S.chips.splice(i,1); renderChips(); }
 setupTimeCombo("bkStart","bkStartList"); setupTimeCombo("bkEnd","bkEndList"); setupPartCombo();
 $("buildTag").textContent = "build " + BUILD;
@@ -661,13 +665,14 @@ async function saveBooking(){
   const starts=atLocal(y,mo-1,da,sh,sm), ends=atLocal(y,mo-1,da,eh,em);
   if(ends<=starts){ msg.className="msg err"; msg.textContent="終了は開始より後にしてください"; return; }
   const payload={ room_id:rid, user_id:S.user.id, title:$("bkSubject").value.trim()||null,
-    participants:S.chips, starts_at:starts.toISOString(), ends_at:ends.toISOString(),
+    participants:S.chips.map(c=>c.name), participant_user_ids:chipUserIds(S.chips),
+    starts_at:starts.toISOString(), ends_at:ends.toISOString(),
     notify_before_min: nb? parseInt(nb,10):null, notify_sent_at:null };
   $("bkSave").disabled=true;
   try{
-    let res;
-    if(S.editId) res=await sb.from("bookings").update(payload).eq("id",S.editId).select();
-    else res=await sb.from("bookings").insert(payload).select();
+    const save=async(p)=> S.editId? sb.from("bookings").update(p).eq("id",S.editId).select() : sb.from("bookings").insert(p).select();
+    let res=await save(payload);
+    if(res.error && /participant_user_ids/.test(res.error.message||"")){ const {participant_user_ids, ...rest}=payload; res=await save(rest); }  // 09未適用時のフォールバック
     if(res.error) throw res.error;
     if(!res.data||res.data.length===0){ throw new Error("変更できる権限がありません（自分の予約のみ編集できます）"); }
     closeModal("bkView"); await reload();
