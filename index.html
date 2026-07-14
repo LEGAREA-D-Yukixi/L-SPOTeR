@@ -228,9 +228,9 @@
         <option value="60">開始 60分前</option>
       </select>
     </label>
-    <div class="hint">通知は予約者と参加者本人へ Lark の個人DMで送信されます（参加者は候補から選んだ登録ユーザーが対象）。</div>
+    <div class="hint">通知は予約者と参加者本人へ Lark の個人DMで送信されます（参加者は全社の候補から選べます）。</div>
     <label class="fld"><span>参加者（氏名で検索・Enterで追加）</span>
-      <div class="tcombo"><input id="bkPartInput" type="text" autocomplete="off" placeholder="氏名を入力（登録済みから検索）"><div id="bkPartList" class="tcombo-list"></div></div>
+      <div class="tcombo"><input id="bkPartInput" type="text" autocomplete="off" placeholder="氏名を入力（全社から検索）"><div id="bkPartList" class="tcombo-list"></div></div>
     </label>
     <div id="bkChips" class="chips"></div>
     <div id="bkMsg" class="msg"></div>
@@ -334,7 +334,7 @@ const S = { user:null, profile:null, rooms:[], bookings:[], view:"day", date:new
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-13-01";
+const BUILD = "2026-07-14-01";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -430,9 +430,17 @@ async function saveName(fromSettings){
 async function loadRooms(){
   const { data } = await sb.from("rooms").select("*").eq("is_active",true).order("sort_order");
   S.rooms = data||[];
-  const { data:p } = await sb.from("profiles").select("id,display_name");
-  S.people = (p||[]).filter(x=>x.display_name).map(x=>({ id:x.id, name:x.display_name }));
+  S.people = await loadDirectory();
   S.names = [...new Set(S.people.map(x=>x.name))];
+}
+async function loadDirectory(){
+  // 参加者候補＝全社ディレクトリ（同期済み）。id には Lark open_id が入る（アカウント不要で招待可）。
+  try{
+    const { data, error } = await sb.rpc("list_directory");
+    if(!error && Array.isArray(data)){ return data.filter(x=>x.name && x.open_id).map(x=>({ id:x.open_id, name:x.name })); }
+  }catch(_){/* ディレクトリ未整備時はフォールバック */}
+  const { data:p } = await sb.from("profiles").select("id,display_name");
+  return (p||[]).filter(x=>x.display_name).map(x=>({ id:x.id, name:x.display_name }));
 }
 function viewRange(){ if(S.view==="day"){ const s=dayStart(S.date); return [s, addDays(s,1)]; } const s=weekStart(S.date); return [s, addDays(s,7)]; }
 async function loadBookings(){
@@ -606,7 +614,7 @@ function normalizeTime(v){ v=(v||"").trim(); let m=v.match(/^(\d{1,2}):(\d{1,2})
 }
 function filterPeople(people, query, takenNames){ const q=(query||"").trim().toLowerCase(); const ex=new Set(takenNames||[]);
   return (people||[]).filter(p=> !ex.has(p.name) && (q==="" || String(p.name).toLowerCase().includes(q))); }
-function chipUserIds(chips){ return [...new Set((chips||[]).filter(c=>c.uid).map(c=>c.uid))]; }
+function chipOpenIds(chips){ return [...new Set((chips||[]).filter(c=>c.uid).map(c=>c.uid))]; }
 function chipsFromBooking(participants, people){ return (participants||[]).map(nm=>{ const p=(people||[]).find(x=>x.name===nm); return { name:nm, uid: p? p.id: null }; }); }
 function renderTimeOpts(inp, list){
   const marks=buildTimeMarks(roomById($("bkRoom").value));
@@ -666,14 +674,14 @@ async function saveBooking(){
   const starts=atLocal(y,mo-1,da,sh,sm), ends=atLocal(y,mo-1,da,eh,em);
   if(ends<=starts){ msg.className="msg err"; msg.textContent="終了は開始より後にしてください"; return; }
   const payload={ room_id:rid, user_id:S.user.id, title:$("bkSubject").value.trim()||null,
-    participants:S.chips.map(c=>c.name), participant_user_ids:chipUserIds(S.chips),
+    participants:S.chips.map(c=>c.name), participant_open_ids:chipOpenIds(S.chips),
     starts_at:starts.toISOString(), ends_at:ends.toISOString(),
     notify_before_min: nb? parseInt(nb,10):null, notify_sent_at:null };
   $("bkSave").disabled=true;
   try{
     const save=async(p)=> S.editId? sb.from("bookings").update(p).eq("id",S.editId).select() : sb.from("bookings").insert(p).select();
     let res=await save(payload);
-    if(res.error && /participant_user_ids/.test(res.error.message||"")){ const {participant_user_ids, ...rest}=payload; res=await save(rest); }  // 09未適用時のフォールバック
+    if(res.error && /participant_open_ids/.test(res.error.message||"")){ const {participant_open_ids, ...rest}=payload; res=await save(rest); }  // 13未適用時のフォールバック
     if(res.error) throw res.error;
     if(!res.data||res.data.length===0){ throw new Error("変更できる権限がありません（自分の予約のみ編集できます）"); }
     closeModal("bkView"); await reload();
