@@ -71,10 +71,11 @@
   .room-name{min-width:var(--gutter);width:var(--gutter);flex:none;position:sticky;left:0;background:var(--bg2);border-right:1px solid var(--line);padding:8px 10px;z-index:5;display:flex;flex-direction:column;justify-content:center;line-height:1.3}
   .room-name b{font-size:13px} .room-name small{color:var(--muted);font-size:11px}
   .room-name .loc{color:var(--muted);font-size:10px}
-  .track{position:relative;flex:none;height:var(--row-h);touch-action:pan-x pan-y}
+  .track{position:relative;flex:none;min-height:var(--row-h);align-self:stretch;touch-action:pan-x pan-y}
   .gline{position:absolute;top:0;bottom:0;border-left:1px solid var(--line);pointer-events:none}
   .gline.q{border-left:1px solid rgba(255,255,255,.06)}
   .disband{position:absolute;background:rgba(8,12,28,.55);pointer-events:none;z-index:2}
+  .pastband{position:absolute;background:repeating-linear-gradient(45deg,rgba(90,100,130,.20),rgba(90,100,130,.20) 7px,rgba(90,100,130,.32) 7px,rgba(90,100,130,.32) 14px);pointer-events:none;z-index:3}
   .track:hover{background:rgba(255,255,255,.02)}
   .selov{position:absolute;top:3px;bottom:3px;background:rgba(238,83,64,.32);border:1px solid var(--accent);border-radius:6px;pointer-events:none;z-index:4}
   .nowline{position:absolute;top:0;height:100%;width:2px;background:var(--accent);z-index:6}
@@ -216,7 +217,7 @@
     <label class="fld"><span>予約者</span><div class="ro" id="bkOrganizer"></div></label>
     <label class="fld"><span>会議ブース</span><select id="bkRoom" onchange="bkRoomHint()"></select></label>
     <div id="bkHint" class="hint"></div>
-    <label class="fld"><span>日付</span><input id="bkDate" type="date"></label>
+    <label class="fld"><span>日付</span><input id="bkDate" type="date" onclick="this.showPicker&&this.showPicker()"></label>
     <div class="row2">
       <label class="fld"><span>開始</span><div class="tcombo"><input id="bkStart" type="text" inputmode="numeric" autocomplete="off" placeholder="例 14:30"><div id="bkStartList" class="tcombo-list"></div></div></label>
       <label class="fld"><span>終了</span><div class="tcombo"><input id="bkEnd" type="text" inputmode="numeric" autocomplete="off" placeholder="例 15:00"><div id="bkEndList" class="tcombo-list"></div></div></label>
@@ -242,10 +243,10 @@
         </div>
         <div class="row2">
           <label class="fld"><span>終了</span><select id="bkRepEndType" onchange="bkRepeatUI()"><option value="count">回数で指定</option><option value="until">終了日で指定</option></select></label>
-          <label class="fld" id="bkRepCountBox"><span>回数</span><input id="bkRepCount" type="number" min="1" max="60" value="10"></label>
-          <label class="fld hidden" id="bkRepUntilBox"><span>終了日</span><input id="bkRepUntil" type="date"></label>
+          <label class="fld" id="bkRepCountBox"><span>回数</span><input id="bkRepCount" type="number" min="1" max="100" value="10"></label>
+          <label class="fld hidden" id="bkRepUntilBox"><span>終了日</span><input id="bkRepUntil" type="date" onclick="this.showPicker&&this.showPicker()"></label>
         </div>
-        <div class="hint">最大60回まで作成します。すでに予約がある時間帯は自動でスキップします。</div>
+        <div class="hint">繰り返しは最大100回までです。すでに予約がある時間帯は自動でスキップします。</div>
       </div>
     </div>
     <div id="bkSeriesNote" class="hint hidden"></div>
@@ -366,7 +367,7 @@ const S = { user:null, profile:null, rooms:[], bookings:[], view:"day", date:new
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-15-03";
+const BUILD = "2026-07-15-06";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -380,6 +381,16 @@ function minsFrom7(d){ return (d.getHours()-START_H)*60 + d.getMinutes(); }
 function totalMins(){ return (END_H-START_H)*60; }
 function totalCells(){ return totalMins()/CELL; }
 function cellOf(mins){ return Math.max(0, Math.min(Math.floor(mins/CELL), totalCells()-1)); }
+// 過去日時は予約不可。選択可能な最小セル（過去日/営業終了後はnull=選択不可）
+function minCellForDate(dateStr){
+  const today=ymd(new Date());
+  if(dateStr<today) return null;
+  if(dateStr>today) return 0;
+  const nm=minsFrom7(new Date());
+  if(nm<=0) return 0;
+  if(nm>=totalMins()) return null;
+  return Math.ceil(nm/CELL);
+}
 function toHM(m){ m=Math.max(0,Math.min(m,totalMins())); return `${pad(START_H+Math.floor(m/60))}:${pad(m%60)}`; }
 function toHMcap(m){ return m>=totalMins()? "23:59" : toHM(m); }
 function hmToMin(t){ const p=t.slice(0,5).split(":"); return (+p[0])*60+(+p[1]); }
@@ -504,6 +515,9 @@ function renderDay(){
       if(ws>0) h+=`<div class="disband" style="top:0;bottom:0;left:0;width:${ws/60*PX_H}px"></div>`;
       if(we<tot) h+=`<div class="disband" style="top:0;bottom:0;left:${we/60*PX_H}px;width:${(tot-we)/60*PX_H}px"></div>`;
     }
+    { const today=ymd(new Date()), dstr=ymd(S.date);
+      if(dstr<today) h+=`<div class="pastband" style="top:0;bottom:0;left:0;width:${trackW}px"></div>`;
+      else if(dstr===today){ const nm=Math.max(0,Math.min(minsFrom7(new Date()),hours*60)); if(nm>0) h+=`<div class="pastband" style="top:0;bottom:0;left:0;width:${nm/60*PX_H}px"></div>`; } }
     if(ymd(new Date())===ymd(S.date)){ const nm=minsFrom7(new Date()); if(nm>=0&&nm<=hours*60) h+=`<div class="nowline" style="left:${nm/60*PX_H}px"></div>`; }
     for(const b of S.bookings.filter(x=>x.room_id===r.id)){
       const s=new Date(b.starts_at), e=new Date(b.ends_at);
@@ -532,6 +546,9 @@ function renderWeek(){
       if(ws>0) h+=`<div class="disband" style="left:0;right:0;top:0;height:${ws/60*WK_PXH}px"></div>`;
       if(we<tot) h+=`<div class="disband" style="left:0;right:0;top:${we/60*WK_PXH}px;height:${(tot-we)/60*WK_PXH}px"></div>`;
     }
+    { const today=ymd(new Date()), dstr=ymd(dd);
+      if(dstr<today) h+=`<div class="pastband" style="left:0;right:0;top:0;height:${hours*WK_PXH}px"></div>`;
+      else if(dstr===today){ const nm=Math.max(0,Math.min(minsFrom7(new Date()),hours*60)); if(nm>0) h+=`<div class="pastband" style="left:0;right:0;top:0;height:${nm/60*WK_PXH}px"></div>`; } }
     for(const b of S.bookings.filter(x=>ymd(new Date(x.starts_at))===ymd(dd))){
       const bs=new Date(b.starts_at), be=new Date(b.ends_at);
       const colH=hours*WK_PXH; const clampW=(v)=>Math.max(0,Math.min(v,colH));
@@ -548,23 +565,24 @@ function renderWeek(){
 
 function posMins(e){ const rect=drag.track.getBoundingClientRect();
   return drag.vertical ? (e.clientY-rect.top)/WK_PXH*60 : (e.clientX-rect.left)/PX_H*60; }
-function clampCells(lo, hi, room){
+function clampCells(lo, hi, room, minCell){
   const N=totalCells();
   lo=Math.max(0,Math.min(lo,N-1)); hi=Math.max(0,Math.min(hi,N-1));
   if(isLimited(room)){ const wsC=Math.round(winStartMins(room)/CELL), weC=Math.round(winEndMins(room)/CELL);
     lo=Math.max(lo,wsC); hi=Math.min(hi,weC-1);
     if(hi<lo) return null; }
+  if(minCell!=null){ lo=Math.max(lo,minCell); if(hi<lo) return null; }   // 過去セルは除外
   return [lo,hi];
 }
-function dragRange(aCell, bCell, room, moved){
+function dragRange(aCell, bCell, room, moved, minCell){
   let lo=Math.min(aCell,bCell), hi=Math.max(aCell,bCell);
   if(!moved) hi=lo+1;                                   // クリックのみは30分(2枠)
-  const c=clampCells(lo,hi,room); if(!c) return null;   // 制限時間帯の外は不可
+  const c=clampCells(lo,hi,room,minCell); if(!c) return null;   // 制限時間帯/過去の外は不可
   const startMin=c[0]*CELL, endMin=Math.min((c[1]+1)*CELL, totalMins());
   return { startMin, endMin, start:toHM(startMin), end:toHMcap(endMin) };
 }
 function positionOv(){ if(!drag||!drag.ov) return; const b=(drag.b==null?drag.a:drag.b);
-  const c=clampCells(Math.min(drag.a,b), Math.max(drag.a,b), roomById(drag.roomId));
+  const c=clampCells(Math.min(drag.a,b), Math.max(drag.a,b), roomById(drag.roomId), drag.minCell);
   if(!c){ drag.ov.style.display="none"; return; } drag.ov.style.display="";
   const s=c[0]*CELL, en=(c[1]+1)*CELL;
   if(drag.vertical){ drag.ov.style.bottom="auto"; drag.ov.style.left="2px"; drag.ov.style.right="2px"; drag.ov.style.top=(s/60*WK_PXH)+"px"; drag.ov.style.height=((en-s)/60*WK_PXH)+"px"; }
@@ -573,7 +591,10 @@ function startDrag(e, vertical){
   if(e.target.closest(".ev")) return;
   const track=e.currentTarget; const rid = vertical ? $("weekRoom").value : track.dataset.room;
   if(!rid) return;
-  drag={ track, vertical, roomId:rid, a:cellOf(0), b:null, mouse:(e.pointerType==="mouse"), moved:false, ov:null };
+  const date = vertical ? track.dataset.date : ymd(S.date);
+  const minCell = minCellForDate(date);
+  if(minCell===null) return;                    // 過去日/営業終了後は選択不可
+  drag={ track, vertical, roomId:rid, a:cellOf(0), b:null, mouse:(e.pointerType==="mouse"), moved:false, ov:null, minCell };
   drag.a = cellOf(posMins(e));
   if(drag.mouse){ e.preventDefault(); drag.ov=document.createElement("div"); drag.ov.className="selov"; track.appendChild(drag.ov); positionOv(); try{track.setPointerCapture(e.pointerId);}catch(_){} }
 }
@@ -584,7 +605,7 @@ function onPointerUp(){ if(!drag) return; const d=drag; drag=null;
   if(d.ov&&d.ov.parentNode) d.ov.parentNode.removeChild(d.ov);
   if(!d.mouse && d.moved) return;
   const b=(d.b==null?d.a:d.b);
-  const r=dragRange(d.a, b, roomById(d.roomId), d.moved);
+  const r=dragRange(d.a, b, roomById(d.roomId), d.moved, d.minCell);
   if(!r) return;
   const date = d.vertical ? d.track.dataset.date : ymd(S.date);
   openBooking(null,{ room:d.roomId, date, start:r.start, end:r.end });
@@ -611,7 +632,7 @@ function repeatRuleLabel(rule){
 }
 // firstStart/firstEnd: Date(local)。rule展開して [{start:Date,end:Date}, ...] を返す（最初の回を含む）
 function expandRecurrence(firstStart, firstEnd, rule, cap){
-  cap = cap||60;
+  cap = cap||100;
   const durMs = firstEnd.getTime()-firstStart.getTime();
   const out=[]; const push=(d)=>{ out.push({start:new Date(d.getTime()), end:new Date(d.getTime()+durMs)}); };
   if(!rule || rule.freq==="none"){ push(firstStart); return out; }
@@ -676,6 +697,29 @@ function parseRepeatRule(){
     if(rule.unit==="week") rule.weekdays=S.repWeekdays.slice().sort((a,b)=>a-b); }
   return rule;
 }
+function applyRuleToUI(rule){
+  if(!rule || !rule.freq || rule.freq==="none"){ $("bkRepeat").value="none"; bkRepeatUI(); return; }
+  $("bkRepeat").value=rule.freq;
+  $("bkRepEndType").value=rule.endType||"count";
+  $("bkRepCount").value=rule.count||10;
+  $("bkRepUntil").value=rule.until||"";
+  if(rule.freq==="custom"){
+    $("bkRepUnit").value=rule.unit||"week";
+    $("bkRepInterval").value=rule.interval||1;
+    const dv=new Date(($("bkDate").value||ymd(S.date))+"T00:00:00");
+    S.repWeekdays=(rule.weekdays&&rule.weekdays.length)? rule.weekdays.slice() : [isNaN(dv.getTime())?1:dv.getDay()];
+  }
+  bkRepeatUI();
+}
+function ruleFromBooking(b){
+  if(b && b.recurrence_rule_json && typeof b.recurrence_rule_json==="object") return b.recurrence_rule_json;
+  const lbl=(b&&b.recurrence_rule)||"";   // 旧データ: ラベルから概算復元
+  if(/毎日/.test(lbl)) return {freq:"daily",endType:"count",count:10};
+  if(/平日/.test(lbl)) return {freq:"weekday",endType:"count",count:10};
+  if(/毎週/.test(lbl)) return {freq:"weekly",endType:"count",count:10};
+  if(/毎月/.test(lbl)) return {freq:"monthly",endType:"count",count:10};
+  return {freq:"weekly",endType:"count",count:10};
+}
 function renderWeekdayChips(){ const wn=["日","月","火","水","木","金","土"]; const box=$("bkWeekdays"); if(!box) return;
   box.innerHTML=wn.map((n,i)=>`<span class="wd-chip${S.repWeekdays.includes(i)?" on":""}" onclick="toggleWeekday(${i})">${n}</span>`).join(""); }
 function toggleWeekday(i){ const k=S.repWeekdays.indexOf(i); if(k>=0){ if(S.repWeekdays.length>1) S.repWeekdays.splice(k,1); } else S.repWeekdays.push(i); renderWeekdayChips(); }
@@ -684,6 +728,7 @@ function bkRepeatUI(){
   const custom=rep==="custom"; $("bkCustomBox").classList.toggle("hidden", !custom);
   const unit=$("bkRepUnit").value; $("bkWeekdaysBox").classList.toggle("hidden", !(custom&&unit==="week"));
   const et=$("bkRepEndType").value; $("bkRepCountBox").classList.toggle("hidden", et!=="count"); $("bkRepUntilBox").classList.toggle("hidden", et!=="until");
+  if(et==="until"){ const u=$("bkRepUntil"); if(u) u.min=$("bkDate").value||""; }
   if(custom&&unit==="week") renderWeekdayChips();
 }
 async function insertBooking(p){
@@ -693,7 +738,8 @@ async function insertBooking(p){
     if(!res.error) return res;
     const m=res.error.message||"";
     if(/participant_open_ids/.test(m) && ("participant_open_ids" in payload)){ delete payload.participant_open_ids; continue; }
-    if(/recurrence/.test(m) && (("recurrence_group" in payload)||("recurrence_rule" in payload))){ delete payload.recurrence_group; delete payload.recurrence_rule; continue; }
+    if(/recurrence_rule_json/.test(m) && ("recurrence_rule_json" in payload)){ delete payload.recurrence_rule_json; continue; }
+    if(/recurrence/.test(m) && (("recurrence_group" in payload)||("recurrence_rule" in payload))){ delete payload.recurrence_group; delete payload.recurrence_rule; delete payload.recurrence_rule_json; continue; }
     return res;
   }
   return await sb.from("bookings").insert(payload).select();
@@ -705,7 +751,9 @@ function openBooking(id, prefill){
   $("bkDelete").classList.add("hidden");
   if(id){
     const b=S.bookings.find(x=>x.id===id); if(!b)return;
-    const own = b.user_id===S.user.id, canEdit=own, canDelete=own||S.profile.is_admin;
+    const own = b.user_id===S.user.id, canEdit=own;
+    const ended = new Date(b.ends_at) <= new Date();
+    const canDelete = (own||S.profile.is_admin) && !ended;   // 終了済みは削除不可
     $("bkTitle").textContent = canEdit?"予約を編集":"予約の詳細";
     $("bkOrganizer").textContent = b.organizer_name || "";
     $("bkRoom").value=b.room_id; $("bkDate").value=ymd(new Date(b.starts_at));
@@ -715,10 +763,17 @@ function openBooking(id, prefill){
     [$("bkRoom"),$("bkDate"),$("bkStart"),$("bkEnd"),$("bkSubject"),$("bkPartInput"),$("bkNotify")].forEach(el=>el.disabled=!canEdit);
     $("bkSave").classList.toggle("hidden",!canEdit);
     $("bkDelete").classList.toggle("hidden",!canDelete);
-    $("bkRepeatWrap").classList.add("hidden");
-    const sn=$("bkSeriesNote");
-    if(b.recurrence_group){ sn.textContent="繰り返し予約"+(b.recurrence_rule?"（"+b.recurrence_rule+"）":"")+"。取消時に範囲を選べます。"; sn.classList.remove("hidden"); }
-    else sn.classList.add("hidden");
+    const sn=$("bkSeriesNote"); const series=!!b.recurrence_group;
+    if(series && canEdit){
+      $("bkRepeatWrap").classList.remove("hidden");
+      applyRuleToUI(ruleFromBooking(b));
+      sn.textContent="繰り返し予約。保存時に「この予定のみ / この予定以降すべて」を選べます。日程も変更できます。";
+      sn.classList.remove("hidden");
+    } else {
+      $("bkRepeatWrap").classList.add("hidden");
+      if(series){ sn.textContent="繰り返し予約"+(b.recurrence_rule?"（"+b.recurrence_rule+"）":"")+"。"; sn.classList.remove("hidden"); }
+      else sn.classList.add("hidden");
+    }
   }else{
     $("bkTitle").textContent="新規予約"; $("bkSubject").value="";
     $("bkOrganizer").textContent = S.profile.display_name || "";
@@ -822,22 +877,60 @@ async function saveBooking(){
   $("bkSave").disabled=true;
   try{
     if(S.editId){
-      // 既存予約の編集は当該1件のみ更新（繰り返し設定は変更しない）
-      const payload={...base, starts_at:starts.toISOString(), ends_at:ends.toISOString(), notify_sent_at:null};
-      let res=await sb.from("bookings").update(payload).eq("id",S.editId).select();
-      if(res.error && /participant_open_ids/.test(res.error.message||"")){ const {participant_open_ids,...rest}=payload; res=await sb.from("bookings").update(rest).eq("id",S.editId).select(); }
-      if(res.error) throw res.error;
-      if(!res.data||res.data.length===0) throw new Error("変更できる権限がありません（自分の予約のみ編集できます）");
-      closeModal("bkView"); await reload();
+      const cur=S.bookings.find(x=>x.id===S.editId);
+      const g=cur&&cur.recurrence_group;
+      const applyAll = g ? confirm("繰り返し予約の編集です。\n「OK」= この予定以降すべてに反映（日程も再作成）\n「キャンセル」= この予定のみ") : false;
+      if(g && applyAll){
+        // この予定以降すべて: 画面の設定で再作成（過去回は保持）
+        const rule=parseRepeatRule();
+        let occ;
+        if(rule.freq==="none"){ occ=expandRecurrence(starts, ends, rule, 1); }
+        else {
+          if(rule.endType==="until" && !rule.until){ msg.className="msg err"; msg.textContent="繰り返しの終了日を指定してください"; return; }
+          occ=expandRecurrence(starts, ends, rule, 101);
+          if(occ.length>100){ msg.className="msg err"; msg.textContent="繰り返しは最大100回までです。回数または終了日を調整してください。"; return; }
+        }
+        const grp=(rule.freq!=="none" && occ.length>1)? g : null;   // シリーズ維持なら同じgroup
+        const label=(rule.freq!=="none")? repeatRuleLabel(rule):null;
+        const del=await sb.from("bookings").delete().eq("recurrence_group",g).gte("starts_at", cur.starts_at).select();  // 先に将来分を削除
+        if(del.error) throw del.error;
+        if(!del.data||del.data.length===0) throw new Error("変更できる権限がありません（自分の予約のみ編集できます）");
+        let created=0, skipped=0, permErr=false, otherErr=null;
+        for(const o of occ){
+          const p={...base, starts_at:o.start.toISOString(), ends_at:o.end.toISOString(), notify_sent_at:null, recurrence_group:grp, recurrence_rule:label, recurrence_rule_json:(grp?rule:null)};
+          const res=await insertBooking(p);
+          if(res.error){ if(res.error.code==="23P01"||/overlap|exclusion/i.test(res.error.message||"")){ skipped++; continue; } otherErr=res.error; break; }
+          if(!res.data||res.data.length===0){ permErr=true; break; }
+          created++;
+        }
+        if(otherErr) throw otherErr;
+        if(permErr) throw new Error("予約する権限がありません");
+        closeModal("bkView"); await reload();
+        alert(`${created}件を更新しました${skipped?`（${skipped}件は重複でスキップ）`:""}`);
+      } else {
+        // この予定のみ（単発の編集も同じ）
+        const payload={...base, starts_at:starts.toISOString(), ends_at:ends.toISOString(), notify_sent_at:null};
+        let res=await sb.from("bookings").update(payload).eq("id",S.editId).select();
+        if(res.error && /participant_open_ids/.test(res.error.message||"")){ const {participant_open_ids,...rest}=payload; res=await sb.from("bookings").update(rest).eq("id",S.editId).select(); }
+        if(res.error) throw res.error;
+        if(!res.data||res.data.length===0) throw new Error("変更できる権限がありません（自分の予約のみ編集できます）");
+        closeModal("bkView"); await reload();
+      }
     } else {
       // 新規: 繰り返し展開して複数挿入（重複回はスキップ）
       const rule=parseRepeatRule();
-      const occ=expandRecurrence(starts, ends, rule, 60);
+      let occ;
+      if(rule.freq==="none"){ occ=expandRecurrence(starts, ends, rule, 1); }
+      else {
+        if(rule.endType==="until" && !rule.until){ msg.className="msg err"; msg.textContent="繰り返しの終了日を指定してください"; return; }
+        occ=expandRecurrence(starts, ends, rule, 101);   // 101件目まで見て上限超過を検知
+        if(occ.length>100){ msg.className="msg err"; msg.textContent="繰り返しは最大100回までです。回数または終了日を調整してください。"; return; }
+      }
       const group=(rule.freq!=="none" && occ.length>1)? uuid4() : null;
       const label=group? repeatRuleLabel(rule):null;
       let created=0, skipped=0, permErr=false, otherErr=null;
       for(const o of occ){
-        const p={...base, starts_at:o.start.toISOString(), ends_at:o.end.toISOString(), notify_sent_at:null, recurrence_group:group, recurrence_rule:label};
+        const p={...base, starts_at:o.start.toISOString(), ends_at:o.end.toISOString(), notify_sent_at:null, recurrence_group:group, recurrence_rule:label, recurrence_rule_json:(group?rule:null)};
         const res=await insertBooking(p);
         if(res.error){
           if(res.error.code==="23P01" || /overlap|exclusion/i.test(res.error.message||"")){ skipped++; continue; }
@@ -864,8 +957,26 @@ function mapBookingError(e){ const m=(e&&e.message)||""; const code=e&&e.code;
 }
 async function deleteBooking(){
   if(!S.editId) return;
-  const b=S.bookings.find(x=>x.id===S.editId);
-  const g=b&&b.recurrence_group;
+  const b=S.bookings.find(x=>x.id===S.editId); if(!b) return;
+  const now=new Date(), s=new Date(b.starts_at), e=new Date(b.ends_at), g=b.recurrence_group;
+  const setErr=(m)=>{ $("bkMsg").className="msg err"; $("bkMsg").textContent=m; };
+
+  if(e<=now){ setErr("終了した予約は削除できません。"); return; }          // 過去はブロック
+
+  if(s<=now && now<e){                                                    // 進行中: 現在時刻で終了
+    if(!confirm("進行中の予約です。現在時刻で終了しますか？")) return;
+    const endNow=new Date(now); endNow.setSeconds(0,0);
+    if(endNow<=s) endNow.setTime(s.getTime()+60000);
+    const up=await sb.from("bookings").update({ ends_at:endNow.toISOString() }).eq("id",S.editId).select();
+    if(up.error){ setErr("更新に失敗しました: "+up.error.message); return; }
+    if(!up.data||up.data.length===0){ setErr("変更できる権限がありません（自分の予約、または管理者のみ）。"); return; }
+    if(g && confirm("この予約は繰り返しです。この回以降の予定も削除しますか？")){
+      await sb.from("bookings").delete().eq("recurrence_group",g).gt("starts_at", b.starts_at);
+    }
+    closeModal("bkView"); await reload(); return;
+  }
+
+  // 未来: 通常の取消（単発 / シリーズ）
   let scope="one";
   if(g){
     if(!confirm("繰り返し予約です。取り消しますか？")) return;
@@ -877,8 +988,8 @@ async function deleteBooking(){
     ? sb.from("bookings").delete().eq("recurrence_group",g).gte("starts_at", b.starts_at)
     : sb.from("bookings").delete().eq("id",S.editId);
   const { data, error } = await q.select();
-  if(error){ $("bkMsg").className="msg err"; $("bkMsg").textContent="取消に失敗しました: "+error.message; return; }
-  if(!data||data.length===0){ $("bkMsg").className="msg err"; $("bkMsg").textContent="取消できる権限がありません（自分の予約、または管理者のみ）。"; return; }
+  if(error){ setErr("取消に失敗しました: "+error.message); return; }
+  if(!data||data.length===0){ setErr("取消できる権限がありません（自分の予約、または管理者のみ）。"); return; }
   closeModal("bkView"); await reload();
 }
 
