@@ -100,24 +100,25 @@
   .tcombo-list.show{display:block}
   .tcombo-opt{padding:9px 12px;font-size:14px;cursor:pointer;white-space:nowrap}
   .tcombo-opt:hover{background:var(--accent);color:#fff}
-  .lay-area{border:1px solid var(--line);border-radius:12px;padding:12px;background:rgba(255,255,255,.02);margin-bottom:16px}
+  .lay-area{border:1px solid #b7bfd0;border-radius:12px;padding:12px;background:#cfd6e3;color:#16223f;margin-bottom:16px}
   .lay-area-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
   .lay-area-h b{font-size:15px}
   .lay-grid{position:relative;display:grid;gap:10px}
   .lay-cell{min-height:62px;border-radius:10px;border:1px dashed transparent;position:relative;z-index:1}
-  .lay-cell.empty{border-color:var(--line);background:rgba(255,255,255,.02)}
+  .lay-cell.empty{border-color:#9aa5bd;background:rgba(255,255,255,.35)}
   .lay-editing .lay-cell.empty{cursor:pointer}
   .lay-editing .lay-cell.empty:hover{border-color:var(--accent);background:rgba(238,83,64,.08)}
-  .lay-booth{min-height:62px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:#e9eef6;color:#16223f;border:2px solid transparent;cursor:pointer;padding:6px;text-align:center;position:relative;z-index:1;box-shadow:0 2px 6px rgba(0,0,0,.45)}
+  .lay-booth{min-height:62px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:#ffffff;color:#16223f;border:2px solid transparent;cursor:pointer;padding:6px;text-align:center;position:relative;z-index:1;box-shadow:0 2px 6px rgba(0,0,0,.28)}
   .lay-booth b{font-size:20px;line-height:1}
   .lay-booth small{font-size:10px;color:#5b6b8f}
   .lay-booth.sel{border-color:var(--accent);box-shadow:0 0 0 3px rgba(238,83,64,.28)}
-  .lay-table{position:absolute;left:12%;right:12%;top:50%;transform:translateY(-50%);height:42%;border:2px solid var(--line);border-radius:14px;background:rgba(255,255,255,.03);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;pointer-events:none;z-index:0}
+  .lay-table{position:absolute;left:12%;right:12%;top:50%;transform:translateY(-50%);height:42%;border:2px dashed #9aa5bd;border-radius:14px;background:rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;color:#5b6b8f;font-size:12px;pointer-events:none;z-index:0}
+  .lay-door{position:absolute;z-index:4;background:#ee5340;color:#fff;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap;box-shadow:0 1px 5px rgba(0,0,0,.4);letter-spacing:.5px;pointer-events:none}
   .lay-btns{display:flex;gap:6px;flex-wrap:wrap}
   .lay-btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 11px;font-size:12px;cursor:pointer}
   .lay-btn:hover{border-color:var(--accent)}
   .lay-unplaced{display:flex;flex-wrap:wrap;gap:8px}
-  .lay-chip{background:#e9eef6;color:#16223f;border:2px solid transparent;border-radius:9px;padding:7px 11px;font-size:13px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+  .lay-chip{background:#ffffff;color:#16223f;border:2px solid transparent;border-radius:9px;padding:7px 11px;font-size:13px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.28)}
   .lay-chip.sel{border-color:var(--accent);box-shadow:0 0 0 3px rgba(238,83,64,.28)}
   .modal .actions{display:flex;gap:10px;margin-top:20px}
   .hint{color:var(--muted);font-size:12px;margin-top:4px}
@@ -334,7 +335,7 @@ const S = { user:null, profile:null, rooms:[], bookings:[], view:"day", date:new
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-15-01";
+const BUILD = "2026-07-15-02";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -826,10 +827,15 @@ function renderPlace(){
     h+=`<div class="lay-area"><div class="lay-area-h"><b>${esc(area)}</b>`;
     if(admin&&S.layEditing) h+=`<span class="lay-btns"><button class="lay-btn" data-grow="${esc(area)}|rows">行＋</button><button class="lay-btn" data-grow="${esc(area)}|cols">列＋</button></span>`;
     h+=`</div><div class="lay-grid${S.layEditing?" lay-editing":""}" style="grid-template-columns:repeat(${cols},minmax(56px,1fr))">`;
-    if(area==="マリージョア") h+=`<div class="lay-table">テーブル</div>`;
+    if(/マリージョア/.test(area)){
+      h+=`<div class="lay-table">テーブル</div>`;
+      h+=`<div class="lay-door" style="left:-11px;top:50%;transform:translateY(-50%)">扉</div>`;
+      h+=`<div class="lay-door" style="left:16%;top:-11px;transform:translateX(-50%)">扉</div>`;
+    }
+    if(/l-?\s*spot/i.test(area)) h+=`<div class="lay-door" style="left:50%;bottom:-11px;transform:translateX(-50%)">入口</div>`;
     for(let r=1;r<=rows;r++) for(let c=1;c<=cols;c++){
       const b=layAt(S.layRooms, area, r, c);
-      if(b) h+=`<div class="lay-booth${S.laySel===b.id?" sel":""}" data-booth="${b.id}" title="${esc(b.name)}"><b>${b.no}</b>${b.limited?"<small>10-11のみ</small>":""}</div>`;
+      if(b) h+=`<div class="lay-booth${S.laySel===b.id?" sel":""}" data-booth="${b.id}" title="${esc(b.name)}"><b>${b.no}</b>${b.limited?`<small>10:00〜11:00のみ</small>`:""}</div>`;
       else h+=`<div class="lay-cell empty" data-cell="${esc(area)}|${r}|${c}"></div>`;
     }
     h+=`</div></div>`;
@@ -844,10 +850,13 @@ function renderPlace(){
 }
 async function saveLayout(){
   try{
-    const ups=S.layRooms.map(b=> sb.from("rooms").update({ location:(b.area==="未設定"?null:b.area), layout_row:b.row, layout_col:b.col }).eq("id",b.id));
+    const ups=S.layRooms.map(b=> sb.from("rooms").update({ location:(b.area==="未設定"?null:b.area), layout_row:b.row, layout_col:b.col }).eq("id",b.id).select("id"));
     const results=await Promise.all(ups);
     const bad=results.find(r=>r.error); if(bad) throw bad.error;
-    await reload(); openPlace(); alert("レイアウトを保存しました");
+    const notSaved=results.filter(r=>!r.data||r.data.length===0).length;
+    if(notSaved>0) throw new Error("更新が反映されませんでした（管理者権限をご確認ください）: "+notSaved+"件");
+    await loadRooms(); buildWeekRoomSelect(); await reload(); openPlace();
+    alert("レイアウトを保存しました");
   }catch(e){ alert(mapRoomError(e)); }
 }
 
