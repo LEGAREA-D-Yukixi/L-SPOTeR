@@ -277,8 +277,8 @@
   </div>
 </div>
 
-<div id="placeView" class="overlay hidden">
-  <div class="modal" style="max-width:760px">
+<div id="placeView" class="overlay hidden" style="background:rgba(4,7,16,.8)">
+  <div class="modal" style="max-width:760px;background:#0c1526">
     <button class="closex" onclick="closeModal('placeView')" aria-label="閉じる">×</button>
     <h2>会議ブース場所</h2>
     <div id="placeOut"></div>
@@ -334,7 +334,7 @@ const S = { user:null, profile:null, rooms:[], bookings:[], view:"day", date:new
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-14-01";
+const BUILD = "2026-07-14-02";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
