@@ -26,6 +26,11 @@
   .wm{font-weight:800;letter-spacing:2px;font-size:15px;color:#fff}
   .pill{display:inline-block;border:1px solid rgba(255,255,255,.34);color:#fff;border-radius:6px;padding:3px 11px;font-size:11px;letter-spacing:2px;font-weight:600}
   .pill.on{background:var(--accent);border-color:var(--accent)}
+  .mtg{margin:2px 0 8px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);font-size:13px}
+  .mtg .lbl{color:var(--muted);font-size:11px;margin-bottom:4px}
+  .mtg a{color:var(--accent);word-break:break-all;text-decoration:none}
+  .mtg a:hover{text-decoration:underline}
+  .mtg .cp{margin-left:10px;font-size:11px;color:var(--muted);cursor:pointer;text-decoration:underline}
   .adm-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px}
   .adm-row .who{display:flex;flex-direction:column;gap:3px;line-height:1.25;min-width:0}
   .adm-row .who b{font-size:13px} .adm-row .who small{color:var(--muted);font-size:11px;word-break:break-all}
@@ -41,6 +46,10 @@
   input,select{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:9px;padding:10px 12px;font-size:14px}
   input:focus,select:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
   input:disabled{opacity:.4}
+  .pw-wrap{position:relative}
+  .pw-wrap input{padding-right:44px}
+  .pw-toggle{position:absolute;top:50%;right:6px;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;padding:6px;display:flex;align-items:center;line-height:0}
+  .pw-toggle:hover{color:var(--text)}
   .ro{background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:10px 12px;color:var(--muted)}
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:9px;padding:10px 14px;font-size:14px;background:var(--accent);color:#fff;font-weight:700}
   .btn:hover{background:var(--accent-d)}
@@ -173,7 +182,7 @@
       <button id="tabSignup" onclick="setAuthTab('signup')">新規登録</button>
     </div>
     <label class="fld"><span>メールアドレス</span><input id="auEmail" type="email" autocomplete="email" placeholder="you@legarea.jp"></label>
-    <label class="fld"><span>パスワード</span><input id="auPass" type="password" autocomplete="current-password" placeholder="••••••••"></label>
+    <label class="fld"><span>パスワード</span><div class="pw-wrap"><input id="auPass" type="password" autocomplete="current-password" placeholder="••••••••"><button type="button" class="pw-toggle" onclick="togglePw(this)" aria-label="パスワードを表示"></button></div></label>
     <button id="auBtn" class="btn block" onclick="submitAuth()">ログイン</button>
     <button id="auForgot" type="button" class="linklike" onclick="forgotPassword()">パスワードをお忘れですか？（Larkに再設定リンクを送信）</button>
     <div id="auMsg" class="msg"></div>
@@ -184,8 +193,8 @@
   <div class="modal" style="max-width:380px">
     <h2>新しいパスワードを設定</h2>
     <p class="hint" style="margin-bottom:14px">新しいパスワードを入力してください（6文字以上）。</p>
-    <label class="fld"><span>新しいパスワード</span><input id="pwNew" type="password" autocomplete="new-password" placeholder="••••••••"></label>
-    <label class="fld"><span>確認のためもう一度</span><input id="pwNew2" type="password" autocomplete="new-password" placeholder="••••••••"></label>
+    <label class="fld"><span>新しいパスワード</span><div class="pw-wrap"><input id="pwNew" type="password" autocomplete="new-password" placeholder="••••••••"><button type="button" class="pw-toggle" onclick="togglePw(this)" aria-label="パスワードを表示"></button></div></label>
+    <label class="fld"><span>確認のためもう一度</span><div class="pw-wrap"><input id="pwNew2" type="password" autocomplete="new-password" placeholder="••••••••"><button type="button" class="pw-toggle" onclick="togglePw(this)" aria-label="パスワードを表示"></button></div></label>
     <button id="pwBtn" class="btn block" onclick="submitRecovery()">パスワードを更新</button>
     <div id="pwMsg" class="msg"></div>
   </div>
@@ -269,6 +278,7 @@
       </div>
     </div>
     <div id="bkSeriesNote" class="hint hidden"></div>
+    <div id="bkMeeting" class="mtg hidden"></div>
     <label class="fld"><span>件名（任意）</span><input id="bkSubject" type="text" placeholder="例: 定例MTG"></label>
     <label class="fld"><span>通知（Lark）</span>
       <select id="bkNotify">
@@ -387,10 +397,13 @@ const DOMAIN = "@legarea.jp";
 const START_H = 7, END_H = 24, CELL = 15, PX_H = 80, WK_PXH = 48;
 const S = { user:null, profile:null, rooms:[], bookings:[], view:"day", date:new Date(), authTab:"login", names:[], editId:null, chips:[] };
 let recoveryMode=false;   // パスワード再設定リンクで開いたとき true
+const EYE='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYEOFF='<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+function togglePw(btn){ const inp=btn.parentNode.querySelector("input"); if(!inp) return; const show=inp.type==="password"; inp.type=show?"text":"password"; btn.innerHTML=show?EYEOFF:EYE; btn.setAttribute("aria-label", show?"パスワードを隠す":"パスワードを表示"); }
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-15-09";
+const BUILD = "2026-07-15-10";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -789,17 +802,37 @@ function bkRepeatUI(){
 }
 async function insertBooking(p){
   let payload={...p};
-  for(let i=0;i<3;i++){
+  for(let i=0;i<5;i++){
     const res=await sb.from("bookings").insert(payload).select();
     if(!res.error) return res;
     const m=res.error.message||"";
     if(/participant_open_ids/.test(m) && ("participant_open_ids" in payload)){ delete payload.participant_open_ids; continue; }
+    if(/meeting_url/.test(m) && ("meeting_url" in payload)){ delete payload.meeting_url; continue; }
     if(/recurrence_rule_json/.test(m) && ("recurrence_rule_json" in payload)){ delete payload.recurrence_rule_json; continue; }
     if(/recurrence/.test(m) && (("recurrence_group" in payload)||("recurrence_rule" in payload))){ delete payload.recurrence_group; delete payload.recurrence_rule; delete payload.recurrence_rule_json; continue; }
     return res;
   }
   return await sb.from("bookings").insert(payload).select();
 }
+// 参加者がいる予約用に Lark 会議URLを発行（失敗時は null でフォールバック）
+async function createMeetingLink(occ, topic){
+  if(!S.user||!S.user.email||!occ||!occ.length) return null;
+  const last=occ[occ.length-1];
+  try{
+    const r=await fetch(SUPABASE_URL+"/functions/v1/create-lark-meeting", {
+      method:"POST", headers:{ "Content-Type":"application/json", apikey:SUPABASE_ANON_KEY, Authorization:"Bearer "+SUPABASE_ANON_KEY },
+      body: JSON.stringify({ email:S.user.email, topic:topic||"会議", end_time: Math.floor(last.end.getTime()/1000) })
+    });
+    const j=await r.json().catch(()=>({}));
+    return (j&&j.url)||null;
+  }catch(_){ return null; }
+}
+function renderMeeting(url){
+  const el=$("bkMeeting"); if(!el) return;
+  if(url){ el.innerHTML=`<div class="lbl">Lark会議リンク</div><a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a><span class="cp" onclick="copyMeeting()">コピー</span>`; el.classList.remove("hidden"); }
+  else { el.innerHTML=""; el.classList.add("hidden"); }
+}
+function copyMeeting(){ const a=$("bkMeeting").querySelector("a"); if(a){ try{ navigator.clipboard.writeText(a.href); }catch(_){} } }
 function openBooking(id, prefill){
   S.editId=id; S.chips=[]; const msg=$("bkMsg"); msg.className="msg"; msg.textContent="";
   $("bkRoom").innerHTML=S.rooms.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join("");
@@ -821,6 +854,7 @@ function openBooking(id, prefill){
     $("bkSave").classList.toggle("hidden",!canEdit);
     $("bkDelete").classList.toggle("hidden",!canDelete);
     const sn=$("bkSeriesNote"); const series=!!b.recurrence_group;
+    renderMeeting(b.meeting_url);
     if(series && canEdit){
       $("bkRepeatWrap").classList.remove("hidden");
       applyRuleToUI(ruleFromBooking(b));
@@ -841,7 +875,7 @@ function openBooking(id, prefill){
       if(prefill.end){ $("bkEnd").value=prefill.end; }
       else { const em=Math.min(hmToMin(prefill.start)-START_H*60+30, totalMins()); $("bkEnd").value=toHMcap(em); }
     } else { $("bkDate").value=ymd(S.date); }
-    $("bkRepeatWrap").classList.remove("hidden"); $("bkSeriesNote").classList.add("hidden");
+    $("bkRepeatWrap").classList.remove("hidden"); $("bkSeriesNote").classList.add("hidden"); renderMeeting(null);
     $("bkRepeat").value="none"; $("bkRepUnit").value="week"; $("bkRepInterval").value="1";
     $("bkRepEndType").value="count"; $("bkRepCount").value="10"; $("bkRepUntil").value="";
     const d0=new Date(($("bkDate").value||ymd(S.date))+"T00:00:00"); S.repWeekdays=[isNaN(d0.getTime())?1:d0.getDay()];
@@ -958,12 +992,13 @@ async function saveBooking(){
         }
         const grp=(rule.freq!=="none" && occ.length>1)? g : null;   // シリーズ維持なら同じgroup
         const label=(rule.freq!=="none")? repeatRuleLabel(rule):null;
+        const meetingUrl = chipOpenIds(S.chips).length>0 ? await createMeetingLink(occ, base.title || (roomById(rid)&&roomById(rid).name)) : null;
         const del=await sb.from("bookings").delete().eq("recurrence_group",g).gte("starts_at", cur.starts_at).select();  // 先に将来分を削除
         if(del.error) throw del.error;
         if(!del.data||del.data.length===0) throw new Error("変更できる権限がありません（自分の予約のみ編集できます）");
         let created=0, skipped=0, permErr=false, otherErr=null;
         for(const o of occ){
-          const p={...base, starts_at:o.start.toISOString(), ends_at:o.end.toISOString(), notify_sent_at:null, recurrence_group:grp, recurrence_rule:label, recurrence_rule_json:(grp?rule:null)};
+          const p={...base, starts_at:o.start.toISOString(), ends_at:o.end.toISOString(), notify_sent_at:null, recurrence_group:grp, recurrence_rule:label, recurrence_rule_json:(grp?rule:null), meeting_url:meetingUrl};
           const res=await insertBooking(p);
           if(res.error){ if(res.error.code==="23P01"||/overlap|exclusion/i.test(res.error.message||"")){ skipped++; continue; } otherErr=res.error; break; }
           if(!res.data||res.data.length===0){ permErr=true; break; }
@@ -994,9 +1029,10 @@ async function saveBooking(){
       }
       const group=(rule.freq!=="none" && occ.length>1)? uuid4() : null;
       const label=group? repeatRuleLabel(rule):null;
+      const meetingUrl = chipOpenIds(S.chips).length>0 ? await createMeetingLink(occ, base.title || (roomById(rid)&&roomById(rid).name)) : null;
       let created=0, skipped=0, permErr=false, otherErr=null;
       for(const o of occ){
-        const p={...base, starts_at:o.start.toISOString(), ends_at:o.end.toISOString(), notify_sent_at:null, recurrence_group:group, recurrence_rule:label, recurrence_rule_json:(group?rule:null)};
+        const p={...base, starts_at:o.start.toISOString(), ends_at:o.end.toISOString(), notify_sent_at:null, recurrence_group:group, recurrence_rule:label, recurrence_rule_json:(group?rule:null), meeting_url:meetingUrl};
         const res=await insertBooking(p);
         if(res.error){
           if(res.error.code==="23P01" || /overlap|exclusion/i.test(res.error.message||"")){ skipped++; continue; }
@@ -1308,6 +1344,7 @@ document.addEventListener("pointermove", onPointerMove);
 document.addEventListener("pointerup", onPointerUp);
 document.addEventListener("pointercancel", onPointerCancel);
 (async function boot(){
+  for(const b of document.querySelectorAll(".pw-toggle")) b.innerHTML=EYE;
   if(!SUPABASE_URL||SUPABASE_URL.includes("YOUR-PROJECT")){ document.body.innerHTML='<div class="auth-wrap"><div class="auth-card"><h1>設定が未完了です</h1><p class="sub">config.js に Supabase の URL と anon キーを設定してください。</p></div></div>'; return; }
   sb.auth.onAuthStateChange(async (evt,session)=>{
     if(evt==="PASSWORD_RECOVERY"){ recoveryMode=true; if(session&&session.user) S.user=session.user; showRecovery(); return; }
