@@ -25,6 +25,10 @@
   .mark::before{content:"";position:absolute;inset:5px;background:var(--accent);border-radius:2px;transform:rotate(45deg)}
   .wm{font-weight:800;letter-spacing:2px;font-size:15px;color:#fff}
   .pill{display:inline-block;border:1px solid rgba(255,255,255,.34);color:#fff;border-radius:6px;padding:3px 11px;font-size:11px;letter-spacing:2px;font-weight:600}
+  .pill.on{background:var(--accent);border-color:var(--accent)}
+  .adm-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px}
+  .adm-row .who{display:flex;flex-direction:column;gap:3px;line-height:1.25;min-width:0}
+  .adm-row .who b{font-size:13px} .adm-row .who small{color:var(--muted);font-size:11px;word-break:break-all}
   .auth-wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
   .auth-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:30px;width:100%;max-width:390px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
   .auth-card h1{font-size:23px;margin:16px 0 8px;color:var(--text);font-weight:800}
@@ -46,6 +50,8 @@
   .btn.danger{background:transparent;color:var(--danger);border:1px solid var(--danger);font-weight:600}
   .btn.danger:hover{background:rgba(255,91,87,.12)}
   .btn.sm{padding:7px 10px;font-size:12px}
+  .linklike{background:none;border:none;color:var(--muted);font-size:12px;text-decoration:underline;cursor:pointer;margin:10px auto 0;display:block;padding:0}
+  .linklike:hover{color:var(--text)}
   .btn:disabled{opacity:.5;cursor:default}
   .msg{font-size:13px;margin-top:12px;min-height:18px}
   .msg.err{color:var(--danger)} .msg.ok{color:var(--ok)}
@@ -168,7 +174,19 @@
     <label class="fld"><span>メールアドレス</span><input id="auEmail" type="email" autocomplete="email" placeholder="you@legarea.jp"></label>
     <label class="fld"><span>パスワード</span><input id="auPass" type="password" autocomplete="current-password" placeholder="••••••••"></label>
     <button id="auBtn" class="btn block" onclick="submitAuth()">ログイン</button>
+    <button id="auForgot" type="button" class="linklike" onclick="forgotPassword()">パスワードをお忘れですか？（Larkに再設定リンクを送信）</button>
     <div id="auMsg" class="msg"></div>
+  </div>
+</div>
+
+<div id="pwView" class="overlay hidden">
+  <div class="modal" style="max-width:380px">
+    <h2>新しいパスワードを設定</h2>
+    <p class="hint" style="margin-bottom:14px">新しいパスワードを入力してください（6文字以上）。</p>
+    <label class="fld"><span>新しいパスワード</span><input id="pwNew" type="password" autocomplete="new-password" placeholder="••••••••"></label>
+    <label class="fld"><span>確認のためもう一度</span><input id="pwNew2" type="password" autocomplete="new-password" placeholder="••••••••"></label>
+    <button id="pwBtn" class="btn block" onclick="submitRecovery()">パスワードを更新</button>
+    <div id="pwMsg" class="msg"></div>
   </div>
 </div>
 
@@ -336,6 +354,9 @@
       </div>
     </div>
     <div id="sysMsg" class="msg"></div>
+    <div class="rp-h" style="margin-top:16px">管理者権限の管理</div>
+    <p class="hint" style="margin-bottom:8px">ユーザーに管理者権限を付与・解除できます（管理者のみ表示）。</p>
+    <div id="adminList"></div>
     <div class="hint" style="margin-top:12px;padding:10px;border:1px dashed var(--line);border-radius:8px">配置図（レイアウト）の編集は「会議ブース場所」画面 →「レイアウトを編集」から行えます（管理者のみ）。</div>
   </div>
 </div>
@@ -364,10 +385,11 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const DOMAIN = "@legarea.jp";
 const START_H = 7, END_H = 24, CELL = 15, PX_H = 80, WK_PXH = 48;
 const S = { user:null, profile:null, rooms:[], bookings:[], view:"day", date:new Date(), authTab:"login", names:[], editId:null, chips:[] };
+let recoveryMode=false;   // パスワード再設定リンクで開いたとき true
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-15-06";
+const BUILD = "2026-07-15-07";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -407,6 +429,7 @@ function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",
 function setAuthTab(t){ S.authTab=t;
   $("tabLogin").classList.toggle("on",t==="login"); $("tabSignup").classList.toggle("on",t==="signup");
   $("auBtn").textContent = t==="login"?"ログイン":"新規登録";
+  $("auForgot").classList.toggle("hidden", t!=="login");
   $("auPass").autocomplete = t==="login"?"current-password":"new-password";
   $("auMsg").textContent="";
 }
@@ -425,6 +448,36 @@ async function submitAuth(){
     }
   }catch(e){ msg.className="msg err"; msg.textContent = mapAuthError(e.message); }
   finally{ $("auBtn").disabled=false; }
+}
+async function forgotPassword(){
+  const email=$("auEmail").value.trim().toLowerCase(); const msg=$("auMsg"); msg.className="msg";
+  if(!email){ msg.className="msg err"; msg.textContent="メールアドレスを入力してから押してください"; return; }
+  $("auForgot").disabled=true; msg.textContent="送信中…";
+  try{
+    await fetch(SUPABASE_URL+"/functions/v1/password-reset-lark", {
+      method:"POST", headers:{ "Content-Type":"application/json", apikey:SUPABASE_ANON_KEY, Authorization:"Bearer "+SUPABASE_ANON_KEY },
+      body: JSON.stringify({ email, redirect_to: location.origin+location.pathname })
+    });
+  }catch(_){}
+  msg.className="msg ok"; msg.textContent="登録済みであれば Lark に再設定リンクを送信しました。Lark をご確認ください。";
+  $("auForgot").disabled=false;
+}
+function showRecovery(){ hide("appView"); hide("nameView"); hide("authView"); $("pwMsg").textContent=""; $("pwNew").value=""; $("pwNew2").value=""; show("pwView"); }
+async function submitRecovery(){
+  const p1=$("pwNew").value, p2=$("pwNew2").value; const msg=$("pwMsg"); msg.className="msg"; msg.textContent="";
+  if(p1.length<6){ msg.className="msg err"; msg.textContent="パスワードは6文字以上にしてください"; return; }
+  if(p1!==p2){ msg.className="msg err"; msg.textContent="パスワードが一致しません"; return; }
+  $("pwBtn").disabled=true;
+  try{
+    const { error } = await sb.auth.updateUser({ password:p1 }); if(error) throw error;
+    recoveryMode=false;
+    msg.className="msg ok"; msg.textContent="パスワードを更新しました。";
+    try{ history.replaceState(null,"",location.origin+location.pathname); }catch(_){}
+    hide("pwView");
+    const { data:{ session } } = await sb.auth.getSession();
+    if(session&&session.user){ S.user=session.user; await loadProfile(); await route(); } else show("authView");
+  }catch(e){ msg.className="msg err"; msg.textContent = mapAuthError(e.message)||("更新に失敗しました: "+e.message); }
+  finally{ $("pwBtn").disabled=false; }
 }
 function mapAuthError(m){ m=m||"";
   if(/already registered|already been registered|User already/i.test(m)) return "このメールアドレスは登録済みです。ログインしてください。";
@@ -576,8 +629,9 @@ function clampCells(lo, hi, room, minCell){
 }
 function dragRange(aCell, bCell, room, moved, minCell){
   let lo=Math.min(aCell,bCell), hi=Math.max(aCell,bCell);
-  if(!moved) hi=lo+1;                                   // クリックのみは30分(2枠)
-  const c=clampCells(lo,hi,room,minCell); if(!c) return null;   // 制限時間帯/過去の外は不可
+  if(minCell!=null){ lo=Math.max(lo,minCell); if(hi<lo) hi=lo; }   // 開始を現在時刻以降にクランプ
+  if(!moved) hi=lo+1;                                              // クリックのみは30分(2枠)
+  const c=clampCells(lo,hi,room,minCell); if(!c) return null;      // 制限時間帯の外は不可
   const startMin=c[0]*CELL, endMin=Math.min((c[1]+1)*CELL, totalMins());
   return { startMin, endMin, start:toHM(startMin), end:toHMcap(endMin) };
 }
@@ -1149,7 +1203,31 @@ async function saveLayout(){
   }catch(e){ alert(mapRoomError(e)); }
 }
 
-function openSys(){ if(!S.profile.is_admin) return; renderSysList(); $("sysAddName").value=""; $("sysAddLoc").value=""; $("sysAddLimited").checked=false; syncLimInputs($("sysAddLimited")); $("sysMsg").textContent=""; show("sysView"); }
+function openSys(){ if(!S.profile.is_admin) return; renderSysList(); renderAdminList(); $("sysAddName").value=""; $("sysAddLoc").value=""; $("sysAddLimited").checked=false; syncLimInputs($("sysAddLimited")); $("sysMsg").textContent=""; show("sysView"); }
+async function renderAdminList(){
+  const box=$("adminList"); if(!box) return;
+  box.innerHTML='<div class="hint">読み込み中…</div>';
+  const { data, error } = await sb.rpc("list_users_admin");
+  if(error){ box.innerHTML='<div class="msg err">一覧を取得できませんでした（管理者のみ利用できます）。</div>'; return; }
+  if(!data||!data.length){ box.innerHTML='<div class="hint">ユーザーがいません。</div>'; return; }
+  S._users=data;
+  box.innerHTML=data.map(u=>{
+    const me=u.id===S.user.id; const nm=esc(u.display_name||"(名前未設定)");
+    const badge=u.is_admin?'<span class="pill on">管理者</span>':'<span class="pill">一般</span>';
+    const btn = me ? '<span class="hint">あなた</span>'
+      : u.is_admin ? `<button class="btn sm ghost" onclick="toggleAdmin('${u.id}',false)">解除</button>`
+                   : `<button class="btn sm" onclick="toggleAdmin('${u.id}',true)">管理者にする</button>`;
+    return `<div class="adm-row"><div class="who"><b>${nm}</b> ${badge}<small>${esc(u.email||"")}</small></div>${btn}</div>`;
+  }).join("");
+}
+async function toggleAdmin(id, makeAdmin){
+  const u=(S._users||[]).find(x=>x.id===id); const name=u?(u.display_name||u.email||"このユーザー"):"このユーザー";
+  if(!confirm(`${name} を${makeAdmin?"管理者にします":"一般ユーザーに戻します"}。よろしいですか？`)) return;
+  const { error } = await sb.rpc("set_admin", { p_user_id:id, p_is_admin:makeAdmin });
+  if(error){ $("sysMsg").className="msg err"; $("sysMsg").textContent="変更に失敗しました: "+error.message; return; }
+  $("sysMsg").className="msg ok"; $("sysMsg").textContent="更新しました。";
+  renderAdminList();
+}
 function syncLimInputs(ck){ const row=ck.closest(".sys-row"); if(!row) return; const on=ck.checked;
   const ws=row.querySelector(".sys-ws"), we=row.querySelector(".sys-we"); if(ws) ws.disabled=!on; if(we) we.disabled=!on; }
 function renderSysList(){
@@ -1219,11 +1297,15 @@ document.addEventListener("pointerup", onPointerUp);
 document.addEventListener("pointercancel", onPointerCancel);
 (async function boot(){
   if(!SUPABASE_URL||SUPABASE_URL.includes("YOUR-PROJECT")){ document.body.innerHTML='<div class="auth-wrap"><div class="auth-card"><h1>設定が未完了です</h1><p class="sub">config.js に Supabase の URL と anon キーを設定してください。</p></div></div>'; return; }
-  sb.auth.onAuthStateChange(async (_e,session)=>{
+  sb.auth.onAuthStateChange(async (evt,session)=>{
+    if(evt==="PASSWORD_RECOVERY"){ recoveryMode=true; if(session&&session.user) S.user=session.user; showRecovery(); return; }
+    if(recoveryMode) return;                       // 再設定中は通常ルーティングしない
     if(session&&session.user){ S.user=session.user; await loadProfile(); await route(); }
     else { hide("appView"); hide("nameView"); show("authView"); }
   });
+  if(/type=recovery/.test(location.hash) || /type=recovery/.test(location.search)) recoveryMode=true;
   const { data:{ session } } = await sb.auth.getSession();
+  if(recoveryMode){ showRecovery(); return; }
   if(session&&session.user){ S.user=session.user; await loadProfile(); await route(); }
   else { show("authView"); }
 })();
