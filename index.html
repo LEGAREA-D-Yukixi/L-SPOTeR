@@ -403,7 +403,7 @@ function togglePw(btn){ const inp=btn.parentNode.querySelector("input"); if(!inp
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-15-10";
+const BUILD = "2026-07-15-11";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -505,10 +505,27 @@ async function loadProfile(){
   if(!res.data){ await sb.from("profiles").insert({ id:S.user.id }); S.profile={ id:S.user.id, display_name:null, is_admin:false }; }
   else S.profile=res.data;
 }
+// 氏名(display_name)で Lark open_id を連携（既に連携済みなら現状維持）。連携できた open_id を返す。
+async function linkLarkOpenId(){
+  try{ const { data } = await sb.rpc("link_open_id_by_name"); return data || null; }
+  catch(_){ return null; }
+}
+// 「通知の連携が完了しました」ウェルカムDMを送る（サーバ側で open_id 解決・重複送信は防止）。
+async function sendWelcomeDM(){
+  if(!S.user || !S.user.email) return;
+  try{
+    await fetch(SUPABASE_URL+"/functions/v1/welcome-lark", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json", apikey:SUPABASE_ANON_KEY, Authorization:"Bearer "+SUPABASE_ANON_KEY },
+      body: JSON.stringify({ email:S.user.email })
+    });
+  }catch(_){}
+}
 async function route(){
   hide("authView");
   if(!S.profile.display_name){ await fillDivisions("nmDivision", S.profile.division, "選択してください"); show("nameView"); $("nmInput").focus(); return; }
   hide("nameView"); show("appView");
+  linkLarkOpenId();   // 未連携なら氏名で連携（既存/復帰ユーザー対策・冪等）
   $("whoLabel").textContent = S.profile.display_name + (S.profile.is_admin?"（管理者）":"");
   $("btnReport").classList.toggle("hidden", !S.profile.is_admin);
   $("btnSys").classList.toggle("hidden", !S.profile.is_admin);
@@ -530,7 +547,7 @@ async function saveName(fromSettings){
   S.profile.display_name=name;
   if(S.divisionsFeature) S.profile.division = upd.division;
   if(fromSettings){ msg.className="msg ok"; msg.textContent="保存しました（過去予約の予約者名も更新されます）"; $("whoLabel").textContent=name+(S.profile.is_admin?"（管理者）":""); await reload(); }
-  else route();
+  else { const oid=await linkLarkOpenId(); if(oid) sendWelcomeDM(); route(); }   // 初回登録: 氏名で連携→ウェルカムDM
 }
 
 async function loadRooms(){
