@@ -108,6 +108,7 @@
   .tcombo{position:relative}
   .tcombo-list{position:absolute;left:0;right:0;top:100%;margin-top:4px;z-index:60;background:var(--panel2);border:1px solid var(--line);border-radius:9px;max-height:184px;overflow:auto;display:none;box-shadow:0 12px 32px rgba(0,0,0,.45)}
   .tcombo-list.show{display:block}
+  .tcombo-list.up{top:auto;bottom:100%;margin-top:0;margin-bottom:4px}
   .tcombo-opt{padding:9px 12px;font-size:14px;cursor:pointer;white-space:nowrap}
   .tcombo-opt:hover{background:var(--accent);color:#fff}
   .lay-area{border:1px solid #b7bfd0;border-radius:12px;padding:12px;background:#cfd6e3;color:#16223f;margin-bottom:16px}
@@ -272,7 +273,7 @@
     <label class="fld"><span>通知（Lark）</span>
       <select id="bkNotify">
         <option value="">通知しない</option>
-        <option value="5">開始 5分前</option>
+        <option value="5" selected>開始 5分前</option>
         <option value="10">開始 10分前</option>
         <option value="15">開始 15分前</option>
         <option value="30">開始 30分前</option>
@@ -281,7 +282,7 @@
     </label>
     <div class="hint">通知は予約者と参加者本人へ Lark の個人DMで送信されます（参加者は全社の候補から選べます）。</div>
     <label class="fld"><span>参加者（氏名で検索・Enterで追加）</span>
-      <div class="tcombo"><input id="bkPartInput" type="text" autocomplete="off" placeholder="氏名を入力（全社から検索）"><div id="bkPartList" class="tcombo-list"></div></div>
+      <div class="tcombo"><input id="bkPartInput" type="text" autocomplete="off" placeholder="氏名を入力（全社から検索）"><div id="bkPartList" class="tcombo-list up"></div></div>
     </label>
     <div id="bkChips" class="chips"></div>
     <div id="bkMsg" class="msg"></div>
@@ -389,7 +390,7 @@ let recoveryMode=false;   // パスワード再設定リンクで開いたとき
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-15-07";
+const BUILD = "2026-07-15-08";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -801,7 +802,7 @@ async function insertBooking(p){
 function openBooking(id, prefill){
   S.editId=id; S.chips=[]; const msg=$("bkMsg"); msg.className="msg"; msg.textContent="";
   $("bkRoom").innerHTML=S.rooms.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join("");
-  $("bkStart").value="10:00"; $("bkEnd").value="11:00"; $("bkNotify").value="";
+  $("bkStart").value="10:00"; $("bkEnd").value="11:00"; $("bkNotify").value="5";
   $("bkDelete").classList.add("hidden");
   if(id){
     const b=S.bookings.find(x=>x.id===id); if(!b)return;
@@ -897,7 +898,7 @@ function setupPartCombo(){
   inp.addEventListener("focus", openList);
   inp.addEventListener("input", openList);
   inp.addEventListener("blur", ()=> setTimeout(()=>list.classList.remove("show"),150));
-  inp.addEventListener("keydown", e=>{ if(e.key==="Enter"||e.key===","){ e.preventDefault(); addChip(inp.value, null); inp.value=""; renderPartOpts(inp,list); } });
+  inp.addEventListener("keydown", e=>{ if((e.key==="Enter"||e.key===",") && !e.isComposing){ e.preventDefault(); addChip(inp.value, null); inp.value=""; renderPartOpts(inp,list); } });
   list.addEventListener("pointerdown", e=>{ const o=e.target.closest(".tcombo-opt"); if(!o) return; e.preventDefault(); addChip(o.dataset.v, o.dataset.uid); inp.value=""; renderPartOpts(inp,list); });
 }
 function renderChips(){ $("bkChips").innerHTML=S.chips.map((c,i)=>`<span class="chip">${esc(c.name)}${c.uid?"":'<small style="opacity:.55;margin-left:4px">通知対象外</small>'}<button onclick="rmChip(${i})" aria-label="削除">×</button></span>`).join(""); }
@@ -908,6 +909,14 @@ $("placeOut").addEventListener("click", e=>{
   const gb=e.target.closest("[data-grow]"); if(gb){ const [a,d]=gb.dataset.grow.split("|"); layGrow(a,d); return; }
   const bo=e.target.closest("[data-booth]"); if(bo){ layTapBooth(bo.dataset.booth); return; }
   const ce=e.target.closest("[data-cell]"); if(ce){ const p=ce.dataset.cell.split("|"); layTapCell(p[0], +p[1], +p[2]); return; }
+});
+// 画面外クリックで閉じる（×ボタンを持つモーダルのみ。押下開始と終了が同じ背景のときだけ閉じる）
+let _ovDown=null;
+document.addEventListener("pointerdown", e=>{ _ovDown = (e.target.classList&&e.target.classList.contains("overlay"))? e.target : null; }, true);
+document.addEventListener("click", e=>{
+  const ov=e.target;
+  if(ov && ov===_ovDown && ov.classList.contains("overlay") && !ov.classList.contains("hidden") && ov.querySelector(".closex")){ closeModal(ov.id); }
+  _ovDown=null;
 });
 
 async function saveBooking(){
