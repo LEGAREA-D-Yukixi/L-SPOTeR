@@ -92,6 +92,9 @@
   .modal{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:24px;width:100%;max-width:440px;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.4)}
   .modal h2{margin:0 0 16px;font-size:18px}
   .row2{display:flex;gap:10px}.row2>*{flex:1}
+  .wd-row{display:flex;flex-wrap:wrap;gap:6px}
+  .wd-chip{padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:13px;cursor:pointer;user-select:none;min-width:34px;text-align:center}
+  .wd-chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
   .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
   .chip{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:3px 8px;font-size:12px;display:flex;align-items:center;gap:6px}
   .chip button{background:transparent;border:0;color:var(--muted);font-size:13px;padding:0;line-height:1}
@@ -218,6 +221,34 @@
       <label class="fld"><span>開始</span><div class="tcombo"><input id="bkStart" type="text" inputmode="numeric" autocomplete="off" placeholder="例 14:30"><div id="bkStartList" class="tcombo-list"></div></div></label>
       <label class="fld"><span>終了</span><div class="tcombo"><input id="bkEnd" type="text" inputmode="numeric" autocomplete="off" placeholder="例 15:00"><div id="bkEndList" class="tcombo-list"></div></div></label>
     </div>
+    <div id="bkRepeatWrap">
+      <label class="fld"><span>繰り返し</span>
+        <select id="bkRepeat" onchange="bkRepeatUI()">
+          <option value="none">繰り返さない</option>
+          <option value="daily">毎日</option>
+          <option value="weekly">毎週</option>
+          <option value="monthly">毎月</option>
+          <option value="weekday">平日（月〜金）</option>
+          <option value="custom">カスタム</option>
+        </select>
+      </label>
+      <div id="bkRepeatDetail" class="hidden">
+        <div id="bkCustomBox" class="hidden">
+          <div class="row2">
+            <label class="fld"><span>間隔</span><input id="bkRepInterval" type="number" min="1" max="30" value="1"></label>
+            <label class="fld"><span>単位</span><select id="bkRepUnit" onchange="bkRepeatUI()"><option value="day">日ごと</option><option value="week" selected>週ごと</option><option value="month">月ごと</option></select></label>
+          </div>
+          <label class="fld" id="bkWeekdaysBox"><span>曜日</span><div id="bkWeekdays" class="wd-row"></div></label>
+        </div>
+        <div class="row2">
+          <label class="fld"><span>終了</span><select id="bkRepEndType" onchange="bkRepeatUI()"><option value="count">回数で指定</option><option value="until">終了日で指定</option></select></label>
+          <label class="fld" id="bkRepCountBox"><span>回数</span><input id="bkRepCount" type="number" min="1" max="60" value="10"></label>
+          <label class="fld hidden" id="bkRepUntilBox"><span>終了日</span><input id="bkRepUntil" type="date"></label>
+        </div>
+        <div class="hint">最大60回まで作成します。すでに予約がある時間帯は自動でスキップします。</div>
+      </div>
+    </div>
+    <div id="bkSeriesNote" class="hint hidden"></div>
     <label class="fld"><span>件名（任意）</span><input id="bkSubject" type="text" placeholder="例: 定例MTG"></label>
     <label class="fld"><span>通知（Lark）</span>
       <select id="bkNotify">
@@ -335,7 +366,7 @@ const S = { user:null, profile:null, rooms:[], bookings:[], view:"day", date:new
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-15-02";
+const BUILD = "2026-07-15-03";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -565,6 +596,108 @@ function goToday(){ S.date=new Date(); reload(); }
 function setView(v){ S.view=v; $("segDay").classList.toggle("on",v==="day"); $("segWeek").classList.toggle("on",v==="week"); reload(); }
 function buildWeekRoomSelect(){ const sel=$("weekRoom"); sel.innerHTML=S.rooms.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join(""); }
 
+// ==== 繰り返し予約（Lark相当） ====
+function uuid4(){ return (self.crypto&&crypto.randomUUID)? crypto.randomUUID()
+  : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==="x"?r:(r&0x3|0x8);return v.toString(16);}); }
+function endOfDayLocal(ymd){ const [y,m,d]=String(ymd).split("-").map(Number); return new Date(y,(m||1)-1,d||1,23,59,59,999); }
+function repeatRuleLabel(rule){
+  if(!rule||rule.freq==="none") return null;
+  const map={daily:"毎日",weekly:"毎週",monthly:"毎月",weekday:"平日（月〜金）"};
+  if(rule.freq!=="custom") return map[rule.freq]||"繰り返し";
+  const u={day:"日",week:"週",month:"月"}[rule.unit]||"";
+  let s=`${rule.interval}${u}ごと`;
+  if(rule.unit==="week" && rule.weekdays&&rule.weekdays.length){ const wn=["日","月","火","水","木","金","土"]; s+=`（${rule.weekdays.slice().sort((a,b)=>a-b).map(w=>wn[w]).join("・")}）`; }
+  return s;
+}
+// firstStart/firstEnd: Date(local)。rule展開して [{start:Date,end:Date}, ...] を返す（最初の回を含む）
+function expandRecurrence(firstStart, firstEnd, rule, cap){
+  cap = cap||60;
+  const durMs = firstEnd.getTime()-firstStart.getTime();
+  const out=[]; const push=(d)=>{ out.push({start:new Date(d.getTime()), end:new Date(d.getTime()+durMs)}); };
+  if(!rule || rule.freq==="none"){ push(firstStart); return out; }
+  let unit,interval=1,weekdays=null,weekdayOnly=false;
+  if(rule.freq==="daily"){ unit="day"; }
+  else if(rule.freq==="weekly"){ unit="week"; weekdays=[firstStart.getDay()]; }
+  else if(rule.freq==="monthly"){ unit="month"; }
+  else if(rule.freq==="weekday"){ unit="day"; weekdayOnly=true; }
+  else if(rule.freq==="custom"){ unit=rule.unit||"week"; interval=Math.max(1, rule.interval||1);
+    if(unit==="week") weekdays=(rule.weekdays&&rule.weekdays.length)? rule.weekdays.slice().sort((a,b)=>a-b) : [firstStart.getDay()]; }
+  else { push(firstStart); return out; }
+  const endType=rule.endType||"count";
+  const maxCount = endType==="count" ? Math.max(1, Math.min(cap, rule.count||1)) : cap;
+  const until = (endType==="until" && rule.until) ? endOfDayLocal(rule.until) : null;
+  const hh=firstStart.getHours(), mm=firstStart.getMinutes();
+  const atT=(y,m,d)=> new Date(y,m,d,hh,mm,0,0);
+  const okUntil=(d)=> !until || d.getTime()<=until.getTime();
+  if(unit==="week"){
+    let base=atT(firstStart.getFullYear(), firstStart.getMonth(), firstStart.getDate());
+    base.setDate(base.getDate()-base.getDay()); // その週の日曜
+    let guard=0;
+    while(out.length<maxCount && guard<1000){ guard++;
+      for(const wd of weekdays){
+        const occ=atT(base.getFullYear(), base.getMonth(), base.getDate()); occ.setDate(occ.getDate()+wd);
+        if(occ.getTime()<firstStart.getTime()) continue;
+        if(!okUntil(occ)) return out;
+        if(out.length>=maxCount) return out;
+        push(occ);
+      }
+      base.setDate(base.getDate()+7*interval);
+      if(until && base.getTime()>until.getTime()+7*864e5) break;
+    }
+    return out;
+  }
+  if(unit==="day"){
+    let d=atT(firstStart.getFullYear(), firstStart.getMonth(), firstStart.getDate()); let guard=0;
+    while(out.length<maxCount && guard<6000){ guard++;
+      if(!okUntil(d)) break;
+      if(!(weekdayOnly && (d.getDay()===0||d.getDay()===6))) push(d);
+      d=new Date(d.getTime()); d.setDate(d.getDate()+interval);
+    }
+    return out;
+  }
+  if(unit==="month"){
+    const dom=firstStart.getDate(); let y=firstStart.getFullYear(), m=firstStart.getMonth(); let guard=0;
+    while(out.length<maxCount && guard<1200){ guard++;
+      const dim=new Date(y,m+1,0).getDate();
+      if(dom<=dim){ const occ=atT(y,m,dom);
+        if(occ.getTime()>=firstStart.getTime()){ if(!okUntil(occ)) break; push(occ); } }
+      m+=interval; while(m>11){m-=12;y++;}
+    }
+    return out;
+  }
+  return out;
+}
+function parseRepeatRule(){
+  const freq=$("bkRepeat").value;
+  if(freq==="none") return {freq:"none"};
+  const rule={ freq, endType:$("bkRepEndType").value,
+    count: parseInt($("bkRepCount").value,10)||10, until: $("bkRepUntil").value||null };
+  if(freq==="custom"){ rule.unit=$("bkRepUnit").value; rule.interval=Math.max(1, parseInt($("bkRepInterval").value,10)||1);
+    if(rule.unit==="week") rule.weekdays=S.repWeekdays.slice().sort((a,b)=>a-b); }
+  return rule;
+}
+function renderWeekdayChips(){ const wn=["日","月","火","水","木","金","土"]; const box=$("bkWeekdays"); if(!box) return;
+  box.innerHTML=wn.map((n,i)=>`<span class="wd-chip${S.repWeekdays.includes(i)?" on":""}" onclick="toggleWeekday(${i})">${n}</span>`).join(""); }
+function toggleWeekday(i){ const k=S.repWeekdays.indexOf(i); if(k>=0){ if(S.repWeekdays.length>1) S.repWeekdays.splice(k,1); } else S.repWeekdays.push(i); renderWeekdayChips(); }
+function bkRepeatUI(){
+  const rep=$("bkRepeat").value; $("bkRepeatDetail").classList.toggle("hidden", rep==="none");
+  const custom=rep==="custom"; $("bkCustomBox").classList.toggle("hidden", !custom);
+  const unit=$("bkRepUnit").value; $("bkWeekdaysBox").classList.toggle("hidden", !(custom&&unit==="week"));
+  const et=$("bkRepEndType").value; $("bkRepCountBox").classList.toggle("hidden", et!=="count"); $("bkRepUntilBox").classList.toggle("hidden", et!=="until");
+  if(custom&&unit==="week") renderWeekdayChips();
+}
+async function insertBooking(p){
+  let payload={...p};
+  for(let i=0;i<3;i++){
+    const res=await sb.from("bookings").insert(payload).select();
+    if(!res.error) return res;
+    const m=res.error.message||"";
+    if(/participant_open_ids/.test(m) && ("participant_open_ids" in payload)){ delete payload.participant_open_ids; continue; }
+    if(/recurrence/.test(m) && (("recurrence_group" in payload)||("recurrence_rule" in payload))){ delete payload.recurrence_group; delete payload.recurrence_rule; continue; }
+    return res;
+  }
+  return await sb.from("bookings").insert(payload).select();
+}
 function openBooking(id, prefill){
   S.editId=id; S.chips=[]; const msg=$("bkMsg"); msg.className="msg"; msg.textContent="";
   $("bkRoom").innerHTML=S.rooms.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join("");
@@ -582,6 +715,10 @@ function openBooking(id, prefill){
     [$("bkRoom"),$("bkDate"),$("bkStart"),$("bkEnd"),$("bkSubject"),$("bkPartInput"),$("bkNotify")].forEach(el=>el.disabled=!canEdit);
     $("bkSave").classList.toggle("hidden",!canEdit);
     $("bkDelete").classList.toggle("hidden",!canDelete);
+    $("bkRepeatWrap").classList.add("hidden");
+    const sn=$("bkSeriesNote");
+    if(b.recurrence_group){ sn.textContent="繰り返し予約"+(b.recurrence_rule?"（"+b.recurrence_rule+"）":"")+"。取消時に範囲を選べます。"; sn.classList.remove("hidden"); }
+    else sn.classList.add("hidden");
   }else{
     $("bkTitle").textContent="新規予約"; $("bkSubject").value="";
     $("bkOrganizer").textContent = S.profile.display_name || "";
@@ -592,6 +729,11 @@ function openBooking(id, prefill){
       if(prefill.end){ $("bkEnd").value=prefill.end; }
       else { const em=Math.min(hmToMin(prefill.start)-START_H*60+30, totalMins()); $("bkEnd").value=toHMcap(em); }
     } else { $("bkDate").value=ymd(S.date); }
+    $("bkRepeatWrap").classList.remove("hidden"); $("bkSeriesNote").classList.add("hidden");
+    $("bkRepeat").value="none"; $("bkRepUnit").value="week"; $("bkRepInterval").value="1";
+    $("bkRepEndType").value="count"; $("bkRepCount").value="10"; $("bkRepUntil").value="";
+    const d0=new Date(($("bkDate").value||ymd(S.date))+"T00:00:00"); S.repWeekdays=[isNaN(d0.getTime())?1:d0.getDay()];
+    bkRepeatUI();
   }
   $("bkPartInput").value=""; renderChips(); bkRoomHint(); show("bkView");
 }
@@ -674,18 +816,42 @@ async function saveBooking(){
   const [y,mo,da]=date.split("-").map(Number); const [sh,sm]=st.split(":").map(Number); const [eh,em]=et.split(":").map(Number);
   const starts=atLocal(y,mo-1,da,sh,sm), ends=atLocal(y,mo-1,da,eh,em);
   if(ends<=starts){ msg.className="msg err"; msg.textContent="終了は開始より後にしてください"; return; }
-  const payload={ room_id:rid, user_id:S.user.id, title:$("bkSubject").value.trim()||null,
+  const base={ room_id:rid, user_id:S.user.id, title:$("bkSubject").value.trim()||null,
     participants:S.chips.map(c=>c.name), participant_open_ids:chipOpenIds(S.chips),
-    starts_at:starts.toISOString(), ends_at:ends.toISOString(),
-    notify_before_min: nb? parseInt(nb,10):null, notify_sent_at:null };
+    notify_before_min: nb? parseInt(nb,10):null };
   $("bkSave").disabled=true;
   try{
-    const save=async(p)=> S.editId? sb.from("bookings").update(p).eq("id",S.editId).select() : sb.from("bookings").insert(p).select();
-    let res=await save(payload);
-    if(res.error && /participant_open_ids/.test(res.error.message||"")){ const {participant_open_ids, ...rest}=payload; res=await save(rest); }  // 13未適用時のフォールバック
-    if(res.error) throw res.error;
-    if(!res.data||res.data.length===0){ throw new Error("変更できる権限がありません（自分の予約のみ編集できます）"); }
-    closeModal("bkView"); await reload();
+    if(S.editId){
+      // 既存予約の編集は当該1件のみ更新（繰り返し設定は変更しない）
+      const payload={...base, starts_at:starts.toISOString(), ends_at:ends.toISOString(), notify_sent_at:null};
+      let res=await sb.from("bookings").update(payload).eq("id",S.editId).select();
+      if(res.error && /participant_open_ids/.test(res.error.message||"")){ const {participant_open_ids,...rest}=payload; res=await sb.from("bookings").update(rest).eq("id",S.editId).select(); }
+      if(res.error) throw res.error;
+      if(!res.data||res.data.length===0) throw new Error("変更できる権限がありません（自分の予約のみ編集できます）");
+      closeModal("bkView"); await reload();
+    } else {
+      // 新規: 繰り返し展開して複数挿入（重複回はスキップ）
+      const rule=parseRepeatRule();
+      const occ=expandRecurrence(starts, ends, rule, 60);
+      const group=(rule.freq!=="none" && occ.length>1)? uuid4() : null;
+      const label=group? repeatRuleLabel(rule):null;
+      let created=0, skipped=0, permErr=false, otherErr=null;
+      for(const o of occ){
+        const p={...base, starts_at:o.start.toISOString(), ends_at:o.end.toISOString(), notify_sent_at:null, recurrence_group:group, recurrence_rule:label};
+        const res=await insertBooking(p);
+        if(res.error){
+          if(res.error.code==="23P01" || /overlap|exclusion/i.test(res.error.message||"")){ skipped++; continue; }
+          otherErr=res.error; break;
+        }
+        if(!res.data||res.data.length===0){ permErr=true; break; }
+        created++;
+      }
+      if(otherErr) throw otherErr;
+      if(permErr) throw new Error("予約する権限がありません");
+      if(created===0){ msg.className="msg err"; msg.textContent = occ.length>1? "すべての回が既存予約と重複しています。":"この時間帯はすでに予約が入っています。"; return; }
+      closeModal("bkView"); await reload();
+      if(occ.length>1) alert(`${created}件の予約を作成しました${skipped?`（${skipped}件は既存予約と重複のためスキップ）`:""}`);
+    }
   }catch(e){ msg.className="msg err"; msg.textContent=mapBookingError(e); }
   finally{ $("bkSave").disabled=false; }
 }
@@ -697,8 +863,20 @@ function mapBookingError(e){ const m=(e&&e.message)||""; const code=e&&e.code;
   return "保存に失敗しました: "+m;
 }
 async function deleteBooking(){
-  if(!S.editId) return; if(!confirm("この予約を取り消しますか？")) return;
-  const { data, error } = await sb.from("bookings").delete().eq("id",S.editId).select();
+  if(!S.editId) return;
+  const b=S.bookings.find(x=>x.id===S.editId);
+  const g=b&&b.recurrence_group;
+  let scope="one";
+  if(g){
+    if(!confirm("繰り返し予約です。取り消しますか？")) return;
+    scope = confirm("この回以降をすべて取り消しますか？\n「OK」= この回以降すべて / 「キャンセル」= この回のみ") ? "future" : "one";
+  } else {
+    if(!confirm("この予約を取り消しますか？")) return;
+  }
+  const q = (scope==="future")
+    ? sb.from("bookings").delete().eq("recurrence_group",g).gte("starts_at", b.starts_at)
+    : sb.from("bookings").delete().eq("id",S.editId);
+  const { data, error } = await q.select();
   if(error){ $("bkMsg").className="msg err"; $("bkMsg").textContent="取消に失敗しました: "+error.message; return; }
   if(!data||data.length===0){ $("bkMsg").className="msg err"; $("bkMsg").textContent="取消できる権限がありません（自分の予約、または管理者のみ）。"; return; }
   closeModal("bkView"); await reload();
