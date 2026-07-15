@@ -108,16 +108,16 @@
   .lay-cell.empty{border-color:var(--line);background:rgba(255,255,255,.02)}
   .lay-editing .lay-cell.empty{cursor:pointer}
   .lay-editing .lay-cell.empty:hover{border-color:var(--accent);background:rgba(238,83,64,.08)}
-  .lay-booth{min-height:62px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:var(--panel2);border:2px solid transparent;cursor:pointer;padding:6px;text-align:center;position:relative;z-index:1}
+  .lay-booth{min-height:62px;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:#e9eef6;color:#16223f;border:2px solid transparent;cursor:pointer;padding:6px;text-align:center;position:relative;z-index:1;box-shadow:0 2px 6px rgba(0,0,0,.45)}
   .lay-booth b{font-size:20px;line-height:1}
-  .lay-booth small{font-size:10px;color:var(--muted)}
+  .lay-booth small{font-size:10px;color:#5b6b8f}
   .lay-booth.sel{border-color:var(--accent);box-shadow:0 0 0 3px rgba(238,83,64,.28)}
   .lay-table{position:absolute;left:12%;right:12%;top:50%;transform:translateY(-50%);height:42%;border:2px solid var(--line);border-radius:14px;background:rgba(255,255,255,.03);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;pointer-events:none;z-index:0}
   .lay-btns{display:flex;gap:6px;flex-wrap:wrap}
   .lay-btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 11px;font-size:12px;cursor:pointer}
   .lay-btn:hover{border-color:var(--accent)}
   .lay-unplaced{display:flex;flex-wrap:wrap;gap:8px}
-  .lay-chip{background:var(--panel2);border:2px solid transparent;border-radius:9px;padding:7px 11px;font-size:13px;cursor:pointer}
+  .lay-chip{background:#e9eef6;color:#16223f;border:2px solid transparent;border-radius:9px;padding:7px 11px;font-size:13px;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.4)}
   .lay-chip.sel{border-color:var(--accent);box-shadow:0 0 0 3px rgba(238,83,64,.28)}
   .modal .actions{display:flex;gap:10px;margin-top:20px}
   .hint{color:var(--muted);font-size:12px;margin-top:4px}
@@ -334,7 +334,7 @@ const S = { user:null, profile:null, rooms:[], bookings:[], view:"day", date:new
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-14-02";
+const BUILD = "2026-07-15-01";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
