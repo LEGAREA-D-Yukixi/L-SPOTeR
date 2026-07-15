@@ -108,7 +108,7 @@
   .tcombo{position:relative}
   .tcombo-list{position:absolute;left:0;right:0;top:100%;margin-top:4px;z-index:60;background:var(--panel2);border:1px solid var(--line);border-radius:9px;max-height:184px;overflow:auto;display:none;box-shadow:0 12px 32px rgba(0,0,0,.45)}
   .tcombo-list.show{display:block}
-  .tcombo-list.up{top:auto;bottom:100%;margin-top:0;margin-bottom:4px}
+  .tcombo-list.up{top:auto;bottom:100%;margin-top:0;margin-bottom:4px;max-height:min(70vh,520px)}
   .tcombo-opt{padding:9px 12px;font-size:14px;cursor:pointer;white-space:nowrap}
   .tcombo-opt:hover{background:var(--accent);color:#fff}
   .lay-area{border:1px solid #b7bfd0;border-radius:12px;padding:12px;background:#cfd6e3;color:#16223f;margin-bottom:16px}
@@ -390,7 +390,7 @@ let recoveryMode=false;   // パスワード再設定リンクで開いたとき
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-15-08";
+const BUILD = "2026-07-15-09";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -404,15 +404,11 @@ function minsFrom7(d){ return (d.getHours()-START_H)*60 + d.getMinutes(); }
 function totalMins(){ return (END_H-START_H)*60; }
 function totalCells(){ return totalMins()/CELL; }
 function cellOf(mins){ return Math.max(0, Math.min(Math.floor(mins/CELL), totalCells()-1)); }
-// 過去日時は予約不可。選択可能な最小セル（過去日/営業終了後はnull=選択不可）
-function minCellForDate(dateStr){
-  const today=ymd(new Date());
-  if(dateStr<today) return null;
-  if(dateStr>today) return 0;
+// 今日の場合の「現在時刻(START からの分)」。今日以外はnull（クランプ不要）。
+function nowClampMin(dateStr){
+  if(dateStr!==ymd(new Date())) return null;
   const nm=minsFrom7(new Date());
-  if(nm<=0) return 0;
-  if(nm>=totalMins()) return null;
-  return Math.ceil(nm/CELL);
+  return nm>0 ? nm : 0;
 }
 function toHM(m){ m=Math.max(0,Math.min(m,totalMins())); return `${pad(START_H+Math.floor(m/60))}:${pad(m%60)}`; }
 function toHMcap(m){ return m>=totalMins()? "23:59" : toHM(m); }
@@ -619,27 +615,31 @@ function renderWeek(){
 
 function posMins(e){ const rect=drag.track.getBoundingClientRect();
   return drag.vertical ? (e.clientY-rect.top)/WK_PXH*60 : (e.clientX-rect.left)/PX_H*60; }
-function clampCells(lo, hi, room, minCell){
+function clampCells(lo, hi, room){
   const N=totalCells();
   lo=Math.max(0,Math.min(lo,N-1)); hi=Math.max(0,Math.min(hi,N-1));
   if(isLimited(room)){ const wsC=Math.round(winStartMins(room)/CELL), weC=Math.round(winEndMins(room)/CELL);
     lo=Math.max(lo,wsC); hi=Math.min(hi,weC-1);
     if(hi<lo) return null; }
-  if(minCell!=null){ lo=Math.max(lo,minCell); if(hi<lo) return null; }   // 過去セルは除外
   return [lo,hi];
 }
-function dragRange(aCell, bCell, room, moved, minCell){
+function dragRange(aCell, bCell, room, moved, minMin){
   let lo=Math.min(aCell,bCell), hi=Math.max(aCell,bCell);
-  if(minCell!=null){ lo=Math.max(lo,minCell); if(hi<lo) hi=lo; }   // 開始を現在時刻以降にクランプ
-  if(!moved) hi=lo+1;                                              // クリックのみは30分(2枠)
-  const c=clampCells(lo,hi,room,minCell); if(!c) return null;      // 制限時間帯の外は不可
-  const startMin=c[0]*CELL, endMin=Math.min((c[1]+1)*CELL, totalMins());
+  if(!moved) hi=lo+1;                                             // クリックのみは30分(2枠)
+  const c=clampCells(lo,hi,room); if(!c) return null;            // 制限時間帯の外は不可
+  let startMin=c[0]*CELL, endMin=Math.min((c[1]+1)*CELL, totalMins());
+  if(minMin!=null){
+    if(endMin<=minMin) return null;                              // 終了が現在以前 → 不可
+    if(startMin<minMin) startMin=minMin;                         // 開始を現在時刻(分)ちょうどにクランプ
+  }
   return { startMin, endMin, start:toHM(startMin), end:toHMcap(endMin) };
 }
 function positionOv(){ if(!drag||!drag.ov) return; const b=(drag.b==null?drag.a:drag.b);
-  const c=clampCells(Math.min(drag.a,b), Math.max(drag.a,b), roomById(drag.roomId), drag.minCell);
-  if(!c){ drag.ov.style.display="none"; return; } drag.ov.style.display="";
-  const s=c[0]*CELL, en=(c[1]+1)*CELL;
+  const c=clampCells(Math.min(drag.a,b), Math.max(drag.a,b), roomById(drag.roomId));
+  if(!c){ drag.ov.style.display="none"; return; }
+  let s=c[0]*CELL, en=(c[1]+1)*CELL;
+  if(drag.minMin!=null){ if(en<=drag.minMin){ drag.ov.style.display="none"; return; } if(s<drag.minMin) s=drag.minMin; }
+  drag.ov.style.display="";
   if(drag.vertical){ drag.ov.style.bottom="auto"; drag.ov.style.left="2px"; drag.ov.style.right="2px"; drag.ov.style.top=(s/60*WK_PXH)+"px"; drag.ov.style.height=((en-s)/60*WK_PXH)+"px"; }
   else { drag.ov.style.left=(s/60*PX_H)+"px"; drag.ov.style.width=((en-s)/60*PX_H)+"px"; } }
 function startDrag(e, vertical){
@@ -647,9 +647,10 @@ function startDrag(e, vertical){
   const track=e.currentTarget; const rid = vertical ? $("weekRoom").value : track.dataset.room;
   if(!rid) return;
   const date = vertical ? track.dataset.date : ymd(S.date);
-  const minCell = minCellForDate(date);
-  if(minCell===null) return;                    // 過去日/営業終了後は選択不可
-  drag={ track, vertical, roomId:rid, a:cellOf(0), b:null, mouse:(e.pointerType==="mouse"), moved:false, ov:null, minCell };
+  if(date < ymd(new Date())) return;                              // 過去日は不可
+  const minMin = nowClampMin(date);
+  if(minMin!=null && minMin>=totalMins()) return;                 // 今日で営業終了後は不可
+  drag={ track, vertical, roomId:rid, a:cellOf(0), b:null, mouse:(e.pointerType==="mouse"), moved:false, ov:null, minMin };
   drag.a = cellOf(posMins(e));
   if(drag.mouse){ e.preventDefault(); drag.ov=document.createElement("div"); drag.ov.className="selov"; track.appendChild(drag.ov); positionOv(); try{track.setPointerCapture(e.pointerId);}catch(_){} }
 }
@@ -660,7 +661,7 @@ function onPointerUp(){ if(!drag) return; const d=drag; drag=null;
   if(d.ov&&d.ov.parentNode) d.ov.parentNode.removeChild(d.ov);
   if(!d.mouse && d.moved) return;
   const b=(d.b==null?d.a:d.b);
-  const r=dragRange(d.a, b, roomById(d.roomId), d.moved, d.minCell);
+  const r=dragRange(d.a, b, roomById(d.roomId), d.moved, d.minMin);
   if(!r) return;
   const date = d.vertical ? d.track.dataset.date : ymd(S.date);
   openBooking(null,{ room:d.roomId, date, start:r.start, end:r.end });
@@ -806,9 +807,10 @@ function openBooking(id, prefill){
   $("bkDelete").classList.add("hidden");
   if(id){
     const b=S.bookings.find(x=>x.id===id); if(!b)return;
-    const own = b.user_id===S.user.id, canEdit=own;
+    const own = b.user_id===S.user.id;
     const ended = new Date(b.ends_at) <= new Date();
-    const canDelete = (own||S.profile.is_admin) && !ended;   // 終了済みは削除不可
+    const canEdit = own && !ended;                          // 終了済みは変更不可
+    const canDelete = (own||S.profile.is_admin) && !ended;  // 終了済みは削除不可
     $("bkTitle").textContent = canEdit?"予約を編集":"予約の詳細";
     $("bkOrganizer").textContent = b.organizer_name || "";
     $("bkRoom").value=b.room_id; $("bkDate").value=ymd(new Date(b.starts_at));
@@ -934,6 +936,7 @@ async function saveBooking(){
   const [y,mo,da]=date.split("-").map(Number); const [sh,sm]=st.split(":").map(Number); const [eh,em]=et.split(":").map(Number);
   const starts=atLocal(y,mo-1,da,sh,sm), ends=atLocal(y,mo-1,da,eh,em);
   if(ends<=starts){ msg.className="msg err"; msg.textContent="終了は開始より後にしてください"; return; }
+  if(ends<=new Date()){ msg.className="msg err"; msg.textContent="終了時刻が現在時刻より前の予約はできません"; return; }
   const base={ room_id:rid, user_id:S.user.id, title:$("bkSubject").value.trim()||null,
     participants:S.chips.map(c=>c.name), participant_open_ids:chipOpenIds(S.chips),
     notify_before_min: nb? parseInt(nb,10):null };
