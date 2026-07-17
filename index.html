@@ -403,7 +403,7 @@ function togglePw(btn){ const inp=btn.parentNode.querySelector("input"); if(!inp
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-15-11";
+const BUILD = "2026-07-15-13";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -417,12 +417,6 @@ function minsFrom7(d){ return (d.getHours()-START_H)*60 + d.getMinutes(); }
 function totalMins(){ return (END_H-START_H)*60; }
 function totalCells(){ return totalMins()/CELL; }
 function cellOf(mins){ return Math.max(0, Math.min(Math.floor(mins/CELL), totalCells()-1)); }
-// 今日の場合の「現在時刻(START からの分)」。今日以外はnull（クランプ不要）。
-function nowClampMin(dateStr){
-  if(dateStr!==ymd(new Date())) return null;
-  const nm=minsFrom7(new Date());
-  return nm>0 ? nm : 0;
-}
 function toHM(m){ m=Math.max(0,Math.min(m,totalMins())); return `${pad(START_H+Math.floor(m/60))}:${pad(m%60)}`; }
 function toHMcap(m){ return m>=totalMins()? "23:59" : toHM(m); }
 function hmToMin(t){ const p=t.slice(0,5).split(":"); return (+p[0])*60+(+p[1]); }
@@ -653,22 +647,17 @@ function clampCells(lo, hi, room){
     if(hi<lo) return null; }
   return [lo,hi];
 }
-function dragRange(aCell, bCell, room, moved, minMin){
+function dragRange(aCell, bCell, room, moved){
   let lo=Math.min(aCell,bCell), hi=Math.max(aCell,bCell);
   if(!moved) hi=lo+1;                                             // クリックのみは30分(2枠)
   const c=clampCells(lo,hi,room); if(!c) return null;            // 制限時間帯の外は不可
   let startMin=c[0]*CELL, endMin=Math.min((c[1]+1)*CELL, totalMins());
-  if(minMin!=null){
-    if(endMin<=minMin) return null;                              // 終了が現在以前 → 不可
-    if(startMin<minMin) startMin=minMin;                         // 開始を現在時刻(分)ちょうどにクランプ
-  }
   return { startMin, endMin, start:toHM(startMin), end:toHMcap(endMin) };
 }
 function positionOv(){ if(!drag||!drag.ov) return; const b=(drag.b==null?drag.a:drag.b);
   const c=clampCells(Math.min(drag.a,b), Math.max(drag.a,b), roomById(drag.roomId));
   if(!c){ drag.ov.style.display="none"; return; }
   let s=c[0]*CELL, en=(c[1]+1)*CELL;
-  if(drag.minMin!=null){ if(en<=drag.minMin){ drag.ov.style.display="none"; return; } if(s<drag.minMin) s=drag.minMin; }
   drag.ov.style.display="";
   if(drag.vertical){ drag.ov.style.bottom="auto"; drag.ov.style.left="2px"; drag.ov.style.right="2px"; drag.ov.style.top=(s/60*WK_PXH)+"px"; drag.ov.style.height=((en-s)/60*WK_PXH)+"px"; }
   else { drag.ov.style.left=(s/60*PX_H)+"px"; drag.ov.style.width=((en-s)/60*PX_H)+"px"; } }
@@ -677,10 +666,7 @@ function startDrag(e, vertical){
   const track=e.currentTarget; const rid = vertical ? $("weekRoom").value : track.dataset.room;
   if(!rid) return;
   const date = vertical ? track.dataset.date : ymd(S.date);
-  if(date < ymd(new Date())) return;                              // 過去日は不可
-  const minMin = nowClampMin(date);
-  if(minMin!=null && minMin>=totalMins()) return;                 // 今日で営業終了後は不可
-  drag={ track, vertical, roomId:rid, a:cellOf(0), b:null, mouse:(e.pointerType==="mouse"), moved:false, ov:null, minMin };
+  drag={ track, vertical, roomId:rid, a:cellOf(0), b:null, mouse:(e.pointerType==="mouse"), moved:false, ov:null };
   drag.a = cellOf(posMins(e));
   if(drag.mouse){ e.preventDefault(); drag.ov=document.createElement("div"); drag.ov.className="selov"; track.appendChild(drag.ov); positionOv(); try{track.setPointerCapture(e.pointerId);}catch(_){} }
 }
@@ -691,7 +677,7 @@ function onPointerUp(){ if(!drag) return; const d=drag; drag=null;
   if(d.ov&&d.ov.parentNode) d.ov.parentNode.removeChild(d.ov);
   if(!d.mouse && d.moved) return;
   const b=(d.b==null?d.a:d.b);
-  const r=dragRange(d.a, b, roomById(d.roomId), d.moved, d.minMin);
+  const r=dragRange(d.a, b, roomById(d.roomId), d.moved);
   if(!r) return;
   const date = d.vertical ? d.track.dataset.date : ymd(S.date);
   openBooking(null,{ room:d.roomId, date, start:r.start, end:r.end });
@@ -858,9 +844,10 @@ function openBooking(id, prefill){
   if(id){
     const b=S.bookings.find(x=>x.id===id); if(!b)return;
     const own = b.user_id===S.user.id;
+    const admin = !!S.profile.is_admin;
     const ended = new Date(b.ends_at) <= new Date();
-    const canEdit = own && !ended;                          // 終了済みは変更不可
-    const canDelete = (own||S.profile.is_admin) && !ended;  // 終了済みは削除不可
+    const canEdit = ended ? admin : own;                    // 過去(終了済み)は管理者のみ編集可
+    const canDelete = admin || (own && !ended);             // 過去は管理者のみ削除可（未来は本人/管理者）
     $("bkTitle").textContent = canEdit?"予約を編集":"予約の詳細";
     $("bkOrganizer").textContent = b.organizer_name || "";
     $("bkRoom").value=b.room_id; $("bkDate").value=ymd(new Date(b.starts_at));
@@ -987,7 +974,6 @@ async function saveBooking(){
   const [y,mo,da]=date.split("-").map(Number); const [sh,sm]=st.split(":").map(Number); const [eh,em]=et.split(":").map(Number);
   const starts=atLocal(y,mo-1,da,sh,sm), ends=atLocal(y,mo-1,da,eh,em);
   if(ends<=starts){ msg.className="msg err"; msg.textContent="終了は開始より後にしてください"; return; }
-  if(ends<=new Date()){ msg.className="msg err"; msg.textContent="終了時刻が現在時刻より前の予約はできません"; return; }
   const base={ room_id:rid, user_id:S.user.id, title:$("bkSubject").value.trim()||null,
     participants:S.chips.map(c=>c.name), participant_open_ids:chipOpenIds(S.chips),
     notify_before_min: nb? parseInt(nb,10):null };
@@ -995,6 +981,7 @@ async function saveBooking(){
   try{
     if(S.editId){
       const cur=S.bookings.find(x=>x.id===S.editId);
+      if(cur && new Date(cur.ends_at) <= new Date() && !S.profile.is_admin){ msg.className="msg err"; msg.textContent="過去の予約は編集できません（管理者のみ）"; $("bkSave").disabled=false; return; }
       const g=cur&&cur.recurrence_group;
       const applyAll = g ? confirm("繰り返し予約の編集です。\n「OK」= この予定以降すべてに反映（日程も再作成）\n「キャンセル」= この予定のみ") : false;
       if(g && applyAll){
@@ -1080,7 +1067,7 @@ async function deleteBooking(){
   const now=new Date(), s=new Date(b.starts_at), e=new Date(b.ends_at), g=b.recurrence_group;
   const setErr=(m)=>{ $("bkMsg").className="msg err"; $("bkMsg").textContent=m; };
 
-  if(e<=now){ setErr("終了した予約は削除できません。"); return; }          // 過去はブロック
+  if(e<=now && !S.profile.is_admin){ setErr("過去の予約は削除できません（管理者のみ）。"); return; }   // 過去は管理者のみ
 
   if(s<=now && now<e){                                                    // 進行中: 現在時刻で終了
     if(!confirm("進行中の予約です。現在時刻で終了しますか？")) return;
@@ -1095,7 +1082,7 @@ async function deleteBooking(){
     closeModal("bkView"); await reload(); return;
   }
 
-  // 未来: 通常の取消（単発 / シリーズ）
+  // 通常の取消（過去/未来、単発 / シリーズ）
   let scope="one";
   if(g){
     if(!confirm("繰り返し予約です。取り消しますか？")) return;
