@@ -132,6 +132,9 @@
   .lay-booth b{font-size:20px;line-height:1}
   .lay-booth small{font-size:10px;color:#5b6b8f}
   .lay-booth.sel{border-color:var(--accent);box-shadow:0 0 0 3px rgba(238,83,64,.28)}
+  .lay-del{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;border:none;background:#e5484d;color:#fff;font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.4);z-index:3;padding:0}
+  .lay-del:hover{background:#cc3a3f}
+  .lay-chip{position:relative}
   .lay-table{position:absolute;left:12%;right:12%;top:50%;transform:translateY(-50%);height:42%;border:2px dashed #9aa5bd;border-radius:14px;background:rgba(255,255,255,.45);display:flex;align-items:center;justify-content:center;color:#5b6b8f;font-size:12px;pointer-events:none;z-index:0}
   .lay-door{position:absolute;z-index:4;background:#ee5340;color:#fff;font-size:9px;font-weight:700;padding:2px 8px;border-radius:20px;white-space:nowrap;box-shadow:0 1px 5px rgba(0,0,0,.4);letter-spacing:.5px;pointer-events:none}
   .lay-btns{display:flex;gap:6px;flex-wrap:wrap}
@@ -403,7 +406,7 @@ function togglePw(btn){ const inp=btn.parentNode.querySelector("input"); if(!inp
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-15-13";
+const BUILD = "2026-07-15-14";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -946,6 +949,7 @@ function rmChip(i){ S.chips.splice(i,1); renderChips(); }
 setupTimeCombo("bkStart","bkStartList"); setupTimeCombo("bkEnd","bkEndList"); setupPartCombo();
 $("buildTag").textContent = "build " + BUILD;
 $("placeOut").addEventListener("click", e=>{
+  const dl=e.target.closest("[data-del]"); if(dl){ e.stopPropagation(); layDeleteBooth(dl.dataset.del); return; }
   const gb=e.target.closest("[data-grow]"); if(gb){ const [a,d]=gb.dataset.grow.split("|"); layGrow(a,d); return; }
   const bo=e.target.closest("[data-booth]"); if(bo){ layTapBooth(bo.dataset.booth); return; }
   const ce=e.target.closest("[data-cell]"); if(ce){ const p=ce.dataset.cell.split("|"); layTapCell(p[0], +p[1], +p[2]); return; }
@@ -1230,7 +1234,7 @@ function renderPlace(){
     if(/l-?\s*spot/i.test(area)) h+=`<div class="lay-door" style="left:50%;bottom:-11px;transform:translateX(-50%)">入口</div>`;
     for(let r=1;r<=rows;r++) for(let c=1;c<=cols;c++){
       const b=layAt(S.layRooms, area, r, c);
-      if(b) h+=`<div class="lay-booth${S.laySel===b.id?" sel":""}" data-booth="${b.id}" title="${esc(b.name)}"><b>${b.no}</b>${b.limited?`<small>10:00〜11:00のみ</small>`:""}</div>`;
+      if(b) h+=`<div class="lay-booth${S.laySel===b.id?" sel":""}" data-booth="${b.id}" title="${esc(b.name)}"><b>${b.no}</b>${b.limited?`<small>10:00〜11:00のみ</small>`:""}${(admin&&S.layEditing)?`<button class="lay-del" data-del="${b.id}" title="このブースを削除">×</button>`:""}</div>`;
       else h+=`<div class="lay-cell empty" data-cell="${esc(area)}|${r}|${c}"></div>`;
     }
     h+=`</div></div>`;
@@ -1238,7 +1242,7 @@ function renderPlace(){
   const un=S.layRooms.filter(x=>!x.row||!x.col);
   if(un.length){
     h+=`<div class="lay-area"><div class="lay-area-h"><b>未配置</b></div><div class="lay-unplaced">`;
-    h+=un.map(b=>`<div class="lay-chip${S.laySel===b.id?" sel":""}" data-booth="${b.id}"><b>${b.no}</b> ${esc(b.name)}</div>`).join("");
+    h+=un.map(b=>`<div class="lay-chip${S.laySel===b.id?" sel":""}" data-booth="${b.id}"><b>${b.no}</b> ${esc(b.name)}${(admin&&S.layEditing)?`<button class="lay-del" data-del="${b.id}" title="このブースを削除">×</button>`:""}</div>`).join("");
     h+=`</div>${(admin&&S.layEditing)?'<p class="hint" style="margin-top:8px">チップをタップして選択 → 配置したいマスをタップ</p>':""}</div>`;
   }
   $("placeOut").innerHTML=h; show("placeView");
@@ -1253,6 +1257,23 @@ async function saveLayout(){
     await loadRooms(); buildWeekRoomSelect(); await reload(); openPlace();
     alert("レイアウトを保存しました");
   }catch(e){ alert(mapRoomError(e)); }
+}
+async function layDeleteBooth(id){
+  const b=S.layRooms.find(x=>x.id===id); if(!b) return;
+  let warn="";
+  try{
+    const { count } = await sb.from("bookings").select("id",{count:"exact",head:true}).eq("room_id",id).gte("ends_at", new Date().toISOString());
+    if(count&&count>0) warn=`\n\n※このブースには今後の予約が ${count} 件あります。削除すると表示されなくなります。`;
+  }catch(_){}
+  if(!confirm(`「${b.name}」を削除しますか？\n予約画面・配置図から表示されなくなります（後から復活も可能）。${warn}`)) return;
+  const { data, error } = await sb.rpc("set_room_active", { p_id:id, p_active:false });
+  if(error){ alert(/forbidden/.test(error.message||"")?"管理者のみ削除できます。":mapRoomError(error)); return; }
+  if(data!==true){ alert("削除できませんでした（対象のブースが見つかりません）。"); return; }
+  await loadRooms(); buildWeekRoomSelect(); await reload();
+  // 編集モードを維持したまま配置図を作り直す
+  S.layRooms = S.rooms.map(r=>({ id:r.id, no:r.sort_order, name:r.name, limited:isLimited(r),
+    area:(r.location&&r.location.trim())||"未設定", row:r.layout_row||null, col:r.layout_col||null }));
+  S.laySel=null; renderPlace();
 }
 
 function openSys(){ if(!S.profile.is_admin) return; renderSysList(); renderAdminList(); $("sysAddName").value=""; $("sysAddLoc").value=""; $("sysAddLimited").checked=false; syncLimInputs($("sysAddLimited")); $("sysMsg").textContent=""; show("sysView"); }
