@@ -34,6 +34,10 @@
   .adm-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px}
   .adm-row .who{display:flex;flex-direction:column;gap:3px;line-height:1.25;min-width:0}
   .adm-row .who b{font-size:13px} .adm-row .who small{color:var(--muted);font-size:11px;word-break:break-all}
+  .mem-add{display:flex;gap:8px;margin-bottom:8px}
+  .mem-add input{flex:1;min-width:0}
+  .mem-add .btn{flex:none}
+  .pill.warn{border-color:#e5a13c;color:#e5a13c}
   .auth-wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
   .auth-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:30px;width:100%;max-width:390px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
   .auth-card h1{font-size:23px;margin:16px 0 8px;color:var(--text);font-weight:800}
@@ -371,6 +375,15 @@
     <div class="rp-h" style="margin-top:16px">管理者権限の管理</div>
     <p class="hint" style="margin-bottom:8px">ユーザーに管理者権限を付与・解除できます（管理者のみ表示）。</p>
     <div id="adminList"></div>
+    <div class="rp-h" style="margin-top:16px">メンバーの管理</div>
+    <p class="hint" style="margin-bottom:8px">Larkの表示名どおりに追加すると、同期後に参加者候補へ表示され、アカウント登録済みなら通知も連携されます。</p>
+    <div class="mem-add">
+      <input id="memAddName" type="text" placeholder="氏名（例: 山田 太郎）" onkeydown="if(event.key==='Enter'&&!event.isComposing)addMember()">
+      <button class="btn sm" onclick="addMember()">追加</button>
+      <button class="btn sm ghost" onclick="resyncMembers()">再同期</button>
+    </div>
+    <div id="memMsg" class="msg"></div>
+    <div id="memberList"></div>
     <div class="hint" style="margin-top:12px;padding:10px;border:1px dashed var(--line);border-radius:8px">配置図（レイアウト）の編集は「会議ブース場所」画面 →「レイアウトを編集」から行えます（管理者のみ）。</div>
   </div>
 </div>
@@ -406,7 +419,7 @@ function togglePw(btn){ const inp=btn.parentNode.querySelector("input"); if(!inp
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-15-14";
+const BUILD = "2026-07-15-15";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -1276,7 +1289,7 @@ async function layDeleteBooth(id){
   S.laySel=null; renderPlace();
 }
 
-function openSys(){ if(!S.profile.is_admin) return; renderSysList(); renderAdminList(); $("sysAddName").value=""; $("sysAddLoc").value=""; $("sysAddLimited").checked=false; syncLimInputs($("sysAddLimited")); $("sysMsg").textContent=""; show("sysView"); }
+function openSys(){ if(!S.profile.is_admin) return; renderSysList(); renderAdminList(); renderMemberList(); $("memAddName").value=""; $("memMsg").textContent=""; $("sysAddName").value=""; $("sysAddLoc").value=""; $("sysAddLimited").checked=false; syncLimInputs($("sysAddLimited")); $("sysMsg").textContent=""; show("sysView"); }
 async function renderAdminList(){
   const box=$("adminList"); if(!box) return;
   box.innerHTML='<div class="hint">読み込み中…</div>';
@@ -1300,6 +1313,52 @@ async function toggleAdmin(id, makeAdmin){
   if(error){ $("sysMsg").className="msg err"; $("sysMsg").textContent="変更に失敗しました: "+error.message; return; }
   $("sysMsg").className="msg ok"; $("sysMsg").textContent="更新しました。";
   renderAdminList();
+}
+// ===== メンバー（許可リスト）の管理（管理者のみ） =====
+async function renderMemberList(){
+  const box=$("memberList"); if(!box) return;
+  box.innerHTML='<div class="hint">読み込み中…</div>';
+  const { data, error } = await sb.rpc("list_members_admin");
+  if(error){ box.innerHTML='<div class="msg err">メンバー一覧を取得できませんでした（管理者のみ利用できます）。</div>'; return; }
+  if(!data||!data.length){ box.innerHTML='<div class="hint">メンバーがいません。</div>'; return; }
+  box.innerHTML=`<div class="hint" style="margin-bottom:6px">${data.length}名（未検出 = Larkの表示名と表記が違うか、同期待ち）</div>`+data.map(m=>{
+    const st = m.linked ? '<span class="pill on">通知連携済み</span>'
+      : m.in_directory ? '<span class="pill">参加者候補に表示中</span>'
+      : '<span class="pill warn">Larkで未検出</span>';
+    return `<div class="adm-row"><div class="who"><b>${esc(m.name)}</b>${st}</div><button class="btn sm ghost" data-mem="${esc(m.name)}" onclick="removeMember(this.dataset.mem)">削除</button></div>`;
+  }).join("");
+}
+function memMsg(cls, text){ const m=$("memMsg"); m.className="msg "+cls; m.textContent=text; }
+// 同期は非同期(数秒)なので、少し待ってから連携・一覧・参加者候補を更新する
+function afterMemberSync(){
+  clearTimeout(S._memSyncT);
+  S._memSyncT=setTimeout(async ()=>{
+    try{ await sb.rpc("admin_relink_members"); }catch(_){}
+    await renderMemberList();
+    S.people = await loadDirectory();
+    if(/同期中/.test($("memMsg").textContent)) memMsg("ok","同期が完了しました。");
+  }, 10000);
+}
+async function addMember(){
+  const inp=$("memAddName"); const name=inp.value.trim();
+  if(!name){ memMsg("err","氏名を入力してください"); return; }
+  const { error } = await sb.rpc("add_member_admin", { p_name:name });
+  if(error){ memMsg("err", /forbidden/.test(error.message||"")?"管理者のみ追加できます。":"追加に失敗しました: "+error.message); return; }
+  inp.value="";
+  memMsg("ok", `「${name}」を追加しました。Larkから同期中です（10秒ほど）…`);
+  renderMemberList(); afterMemberSync();
+}
+async function removeMember(name){
+  if(!confirm(`「${name}」をメンバーから外しますか？\n参加者候補に表示されなくなります（アカウントと過去の予約はそのまま）。`)) return;
+  const { error } = await sb.rpc("remove_member_admin", { p_name:name });
+  if(error){ const m=error.message||""; memMsg("err", /forbidden/.test(m)?"管理者のみ削除できます。":/last/.test(m)?"最後の1人は削除できません。":"削除に失敗しました: "+m); return; }
+  memMsg("ok", `「${name}」を外しました。`);
+  renderMemberList(); S.people = await loadDirectory();
+}
+async function resyncMembers(){
+  const { error } = await sb.rpc("admin_resync_members");
+  if(error){ memMsg("err","再同期に失敗しました: "+(error.message||"")); return; }
+  memMsg("ok","Larkから同期中です（10秒ほど）…"); afterMemberSync();
 }
 function syncLimInputs(ck){ const row=ck.closest(".sys-row"); if(!row) return; const on=ck.checked;
   const ws=row.querySelector(".sys-ws"), we=row.querySelector(".sys-we"); if(ws) ws.disabled=!on; if(we) we.disabled=!on; }
