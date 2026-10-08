@@ -419,7 +419,7 @@ function togglePw(btn){ const inp=btn.parentNode.querySelector("input"); if(!inp
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-15-15";
+const BUILD = "2026-07-15-17";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -682,13 +682,17 @@ function startDrag(e, vertical){
   const track=e.currentTarget; const rid = vertical ? $("weekRoom").value : track.dataset.room;
   if(!rid) return;
   const date = vertical ? track.dataset.date : ymd(S.date);
-  drag={ track, vertical, roomId:rid, a:cellOf(0), b:null, mouse:(e.pointerType==="mouse"), moved:false, ov:null };
+  drag={ track, vertical, roomId:rid, a:cellOf(0), b:null, mouse:(e.pointerType==="mouse"), moved:false, ov:null, sx:e.clientX, sy:e.clientY };
   drag.a = cellOf(posMins(e));
   if(drag.mouse){ e.preventDefault(); drag.ov=document.createElement("div"); drag.ov.className="selov"; track.appendChild(drag.ov); positionOv(); try{track.setPointerCapture(e.pointerId);}catch(_){} }
 }
 function dayDown(e){ startDrag(e,false); }
 function weekDown(e){ startDrag(e,true); }
-function onPointerMove(e){ if(!drag) return; if(drag.mouse){ drag.b=cellOf(posMins(e)); drag.moved=true; positionOv(); } else drag.moved=true; }
+// タッチのタップ判定で許容する指のブレ(px)。これを超えたらスクロール扱い（本当のスクロールはブラウザがpointercancelを送る）
+const TAP_SLOP=10;
+function onPointerMove(e){ if(!drag) return;
+  if(drag.mouse){ drag.b=cellOf(posMins(e)); drag.moved=true; positionOv(); }
+  else if(Math.hypot(e.clientX-drag.sx, e.clientY-drag.sy) > TAP_SLOP) drag.moved=true; }
 function onPointerUp(){ if(!drag) return; const d=drag; drag=null;
   if(d.ov&&d.ov.parentNode) d.ov.parentNode.removeChild(d.ov);
   if(!d.mouse && d.moved) return;
@@ -1351,7 +1355,7 @@ async function addMember(){
 async function removeMember(name){
   if(!confirm(`「${name}」をメンバーから外しますか？\n参加者候補に表示されなくなります（アカウントと過去の予約はそのまま）。`)) return;
   const { error } = await sb.rpc("remove_member_admin", { p_name:name });
-  if(error){ const m=error.message||""; memMsg("err", /forbidden/.test(m)?"管理者のみ削除できます。":/last/.test(m)?"最後の1人は削除できません。":"削除に失敗しました: "+m); return; }
+  if(error){ const m=error.message||""; memMsg("err", /forbidden/.test(m)?"管理者のみ削除できます。":"削除に失敗しました: "+m); return; }
   memMsg("ok", `「${name}」を外しました。`);
   renderMemberList(); S.people = await loadDirectory();
 }
