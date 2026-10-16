@@ -30,11 +30,12 @@ function fakeEl() {
   };
 }
 const chain = new Proxy(function(){}, { get(){ return chain; }, apply(){ return chain; } });
+let client;   // supabase クライアント（テストで from() を差し替える）
 const context = {
   console,
   window:{ APP_CONFIG:{ SUPABASE_URL:"https://xtkphviiclzxszhlbwts.supabase.co", SUPABASE_ANON_KEY:"sb_publishable_test" } },
   document:{ getElementById(){ return fakeEl(); }, createElement(){ return fakeEl(); }, addEventListener(){}, querySelector(){ return fakeEl(); }, querySelectorAll(){ return []; }, body:fakeEl() },
-  supabase:{ createClient(){ return {
+  supabase:{ createClient(){ return client = {
     auth:{ onAuthStateChange(){}, getSession:async()=>({data:{session:null}}), signOut:async()=>{}, signUp:async()=>({error:null}), signInWithPassword:async()=>({error:null}) },
     from(){ return chain; }, channel(){ return { on(){ return this; }, subscribe(){} }; },
   }; } },
@@ -352,7 +353,7 @@ ok(/if\(res\.error\)\{ res = await sb\.from\("profiles"\)\.select\("id,display_n
 ok(/function createMeetingLink\(occ, ?topic\)/.test(html), "[静的] 会議リンク発行ヘルパーあり");
 ok(/functions\/v1\/create-lark-meeting/.test(html), "[静的] create-lark-meeting を呼ぶ");
 ok(/end_time: ?Math\.floor\(last\.end\.getTime\(\)\/1000\)/.test(html), "[静的] 会議URL有効期限=予約終了(unix)");
-ok(/chipOpenIds\(S\.chips\)\.length>0 ?\? ?await createMeetingLink/.test(html), "[静的] 参加者が1人以上のときのみ会議リンク発行");
+ok(/if\(!S\.chips\.length\) return \{ url:null, reason:"none" \}/.test(html) && /if\(!oids\.length\) return \{ url:null, reason:"no-participant-open-id" \}/.test(html), "[静的] 参加者(通知対象)が1人以上のときのみ会議リンク発行");
 { const m = html.match(/meeting_url:meetingUrl/g) || []; ok(m.length >= 2, "[静的] 新規・シリーズ再作成の両方でmeeting_urlを保存"); }
 ok(/if\(\/meeting_url\/\.test\(m\) && \("meeting_url" in payload\)\)\{ delete payload\.meeting_url/.test(html), "[静的] meeting_url列が無い環境でもフォールバック挿入");
 ok(/function renderMeeting\(url\)/.test(html) && /id="bkMeeting"/.test(html), "[静的] 会議リンク表示(renderMeeting + #bkMeeting)");
@@ -431,12 +432,105 @@ ok(/function openSys\(\)\{ if\(!S\.profile\.is_admin\) return;/.test(html), "[�
   const fns = ["list_members_admin","add_member_admin","remove_member_admin","admin_resync_members","admin_relink_members"];
   ok(fns.every(f=>new RegExp("function public\\."+f+"\\(").test(sql)), "[静的] migration26: 5つのRPCを定義");
   ok((sql.match(/if not public\.is_admin\(\) then raise exception 'forbidden'/g)||[]).length===4 && /where public\.is_admin\(\)/.test(sql), "[静的] migration26: 全RPCが管理者限定");
-  ok(/raise exception 'last'/.test(sql), "[静的] migration26: 最後の1人は削除不可(全員取込の防止)");
+  ok(/function public\.prune_lark_directory\(\)/.test(sql) && /grant execute on function public\.prune_lark_directory\(\) to service_role/.test(sql), "[静的] migration26: 許可リスト外を候補から外すprune(サービスロール専用)");
+  ok(/raise exception '先に 16_directory_allow\.sql を実行してください'/.test(sql), "[静的] migration26: 依存(16/21/12)未実行なら明示エラー");
+  ok(/xtkphviiclzxszhlbwts/.test(sql) && /to_regclass\('public\.lark_directory'\) is null/.test(sql), "[静的] migration26: 別プロジェクトで実行したら明示エラー");
+  const m16 = path.join(HERE, "16_directory_allow.sql");
+  const s16 = fs.existsSync(m16) ? fs.readFileSync(m16, "utf8") : "";
+  ok(s16.indexOf("to_regclass('public.lark_directory') is null") > -1 && s16.indexOf("事前チェック") < s16.indexOf("create table if not exists public.directory_allow"), "[静的] migration16: 何か作る前に別プロジェクト/13未実行を検出");
+  ok(/notify pgrst, 'reload schema'/.test(sql), "[静的] migration26: APIスキーマキャッシュを再読込");
+  ok(!/'last'/.test(sql), "[静的] migration26: 最後の1人ガードは撤去(同期がフェイルクローズのため不要)");
+  const sp = path.join(HERE, "supabase/functions/sync-lark-users/index.ts");
+  const sy = fs.existsSync(sp) ? fs.readFileSync(sp, "utf8") : "";
+  ok(/if \(!allow\) \{/.test(sy) && /allowlist-unavailable/.test(sy), "[静的] 同期: 許可リスト取得失敗時は取り込まない(フェイルクローズ)");
+  ok(!/if \(allow\) \{ for/.test(sy) && !/j\.length\) allow =/.test(sy), "[静的] 同期: 空リストで全員取込に戻る分岐が無い");
+  ok(/rpc\/prune_lark_directory/.test(sy) && /directory_pruned/.test(sy), "[静的] 同期: 毎回 許可リスト外を候補から除外");
   ok(/perform public\.trigger_lark_sync\(\)/.test(sql), "[静的] migration26: 追加時にLark同期を起動");
 }
 
+// ---- タップで新規予約を開く（スマホの指のブレ対策） ----
+{
+  const calls=[]; const origOpen=t.openBooking, origRoom=t.roomById;
+  t.openBooking=(id,pre)=>calls.push(pre); t.roomById=()=>({ bookable_start_time:null, bookable_end_time:null });
+  const track={ dataset:{room:"r1"}, getBoundingClientRect:()=>({left:0,top:0}), appendChild(){}, setPointerCapture(){} };
+  const down=(type,x,y)=>t.startDrag({ target:{closest:()=>null}, currentTarget:track, pointerType:type, clientX:x, clientY:y, pointerId:1, preventDefault(){} }, false);
+  const X=8*80;   // 15:00 相当（START_H=7, PX_H=80）
+  down("touch",X,20); t.onPointerMove({clientX:X+3,clientY:22}); t.onPointerUp();
+  ok(calls.length===1 && calls[0].start==="15:00" && calls[0].end==="15:30", "タッチ: 3pxのブレがあってもタップで新規予約が開く(30分)");
+  down("touch",X,20); t.onPointerUp();
+  ok(calls.length===2, "タッチ: ブレなしのタップで新規予約が開く");
+  down("touch",X,20); t.onPointerMove({clientX:X+30,clientY:20}); t.onPointerUp();
+  ok(calls.length===2, "タッチ: 30px動いたらスクロール扱いで開かない");
+  down("touch",X,20); t.onPointerMove({clientX:X+5,clientY:20}); t.onPointerCancel(); t.onPointerUp();
+  ok(calls.length===2, "タッチ: ブラウザがスクロールを開始(pointercancel)したら開かない");
+  down("mouse",X,20); t.onPointerUp();
+  ok(calls.length===3 && calls[2].start==="15:00" && calls[2].end==="15:30", "マウス: クリックは従来どおり30分で開く");
+  t.openBooking=origOpen; t.roomById=origRoom;
+}
+ok(/const TAP_SLOP=10;/.test(html) && /Math\.hypot\(e\.clientX-drag\.sx, e\.clientY-drag\.sy\) > TAP_SLOP/.test(html), "[静的] タッチのタップ判定にブレ許容(TAP_SLOP)");
+
+// ---- ① 今日ボタン: 読み込みが重なっても古い結果で上書きしない / 日表示は表示中の日だけ ----
+{
+  const SS = vm.runInContext("S", context);
+  const D0 = new Date(2026,9,8);
+  eq(t.overlapsDay({starts_at:new Date(2026,9,8,10).toISOString(), ends_at:new Date(2026,9,8,11).toISOString()}, D0), true, "overlapsDay: 当日の予約");
+  eq(t.overlapsDay({starts_at:new Date(2026,9,7,14).toISOString(), ends_at:new Date(2026,9,7,15).toISOString()}, D0), false, "overlapsDay: 前日の予約は対象外");
+  eq(t.overlapsDay({starts_at:new Date(2026,9,7,23).toISOString(), ends_at:new Date(2026,9,8,1).toISOString()}, D0), true, "overlapsDay: 日付をまたぐ予約は両日に表示");
+  eq(t.overlapsDay({starts_at:new Date(2026,9,9,0).toISOString(), ends_at:new Date(2026,9,9,1).toISOString()}, D0), false, "overlapsDay: 翌日0時開始は対象外");
+  const origFrom = client.from; const pend = [];
+  client.from = () => { const q = {}; ["select","lt","gt","order","eq"].forEach(k => q[k] = () => q);
+    let res; const p = new Promise(r => res = r); q.then = (a, b) => p.then(a, b); pend.push(res); return q; };
+  const pA = t.loadBookings();          // 先に始まった読み込み（例: 前日）
+  const pB = t.loadBookings();          // 後から始まった読み込み（例: 今日ボタン）
+  pend[1]({ data:[{ id:"today" }] });   // 新しい方が先に返り、描画まで終わる
+  await new Promise(r => setTimeout(r, 0));
+  pend[0]({ data:[{ id:"yesterday" }] });// 古い方が後から返る
+  const [ra, rb] = await Promise.all([pA, pB]);
+  ok(ra===false && rb===true, "読み込み競合: 古い読み込みは破棄(false)・新しい方を採用(true)");
+  eq(SS.bookings.map(x=>x.id), ["today"], "読み込み競合: 後から返った古い結果で上書きされない");
+  client.from = origFrom; SS.bookings = [];
+}
+ok(/async function reload\(\)\{ if\(await loadBookings\(\)\) render\(\); \}/.test(html), "[静的] reloadは最新の読み込みのときだけ描画");
+ok(/S\.bookings\.filter\(x=>x\.room_id===r\.id && overlapsDay\(x, S\.date\)\)/.test(html), "[静的] 日表示は表示中の日の予約だけ描画");
+
+// ---- ② 会議リンク: 作れない理由を返す / 過去はスキップ / 編集時も作成 / 主催者未連携は参加者をホストに ----
+{
+  const SS = vm.runInContext("S", context);
+  const fut = [{ start:new Date(Date.now()+3600e3), end:new Date(Date.now()+7200e3) }];
+  const past = [{ start:new Date(Date.now()-7200e3), end:new Date(Date.now()-3600e3) }];
+  SS.chips = []; SS.user = { email:"org@legarea.jp" };
+  eq(await t.createMeetingLink(fut,"t"), { url:null, reason:"none" }, "会議リンク: 参加者なしは作らない(none)");
+  SS.chips = [{ name:"手入力さん", uid:null }];
+  eq(await t.createMeetingLink(fut,"t"), { url:null, reason:"no-participant-open-id" }, "会議リンク: 全員通知対象外なら理由を返す");
+  SS.chips = [{ name:"候補さん", uid:"ou_abc" }, { name:"手入力さん", uid:null }];
+  eq(await t.createMeetingLink(past,"t"), { url:null, reason:"past" }, "会議リンク: 過去の予約はLarkを呼ばない(past)");
+  let sent = null;
+  context.fetch = async (url, opt) => { sent = JSON.parse(opt.body); return { json: async () => ({ url:"https://vc-jp.larksuite.com/j/1" }) }; };
+  eq(await t.createMeetingLink(fut,"t"), { url:"https://vc-jp.larksuite.com/j/1", reason:null }, "会議リンク: 成功時はURLを返す");
+  eq(sent && sent.participant_open_ids, ["ou_abc"], "会議リンク: 通知対象の参加者open_idを送る(ホスト代替用)");
+  context.fetch = async () => ({ json: async () => ({ url:null, reason:"no-open-id" }) });
+  eq(await t.createMeetingLink(fut,"t"), { url:null, reason:"no-open-id" }, "会議リンク: サーバの失敗理由をそのまま返す");
+  context.fetch = async () => { throw new Error("offline"); };
+  eq(await t.createMeetingLink(fut,"t"), { url:null, reason:"network" }, "会議リンク: 通信失敗は network");
+  delete context.fetch; SS.chips = []; SS.user = null;
+  eq(t.meetingFailMsg("none"), null, "失敗文言: 参加者なしは表示しない");
+  eq(t.meetingFailMsg("past"), null, "失敗文言: 過去は表示しない");
+  ok(/通知対象外/.test(t.meetingFailMsg("no-participant-open-id")), "失敗文言: 全員通知対象外");
+  ok(/Lark連携が見つからない/.test(t.meetingFailMsg("no-open-id")), "失敗文言: 連携なし");
+  ok(/reserve-fail/.test(t.meetingFailMsg("reserve-fail")), "失敗文言: Lark側の失敗は理由コード付き");
+}
+ok(/const mtg = \(cur&&cur\.meeting_url\) \? \{ url:null, reason:"none" \} : await createMeetingLink\(\[\{ start:starts, end:ends \}\]/.test(html), "[静的] 単発編集: リンクが無ければ作成(参加者の後追加に対応)");
+ok(/\.\.\.\(mtg\.url\?\{ meeting_url:mtg\.url \}:\{\}\)/.test(html), "[静的] 単発編集: 作成できたときだけmeeting_urlを保存(既存リンクは保持)");
+ok((html.match(/meetingFailMsg\(mtg\.reason\)/g)||[]).length===3, "[静的] 新規・シリーズ更新・単発編集の3経路で失敗理由を表示");
+{
+  const cmp = path.join(HERE, "supabase/functions/create-lark-meeting/index.ts");
+  const cm = fs.existsSync(cmp) ? fs.readFileSync(cmp, "utf8") : "";
+  ok(/if \(!ownerId && parts\.length\) \{ ownerId = parts\[0\]; ownerFrom = "participant"; \}/.test(cm), "[静的] create-lark-meeting: 主催者未連携なら参加者をホストに");
+  ok(/filter\(\(x: string\) => \/\^ou_\/\.test\(x\)\)/.test(cm), "[静的] create-lark-meeting: 参加者IDはopen_id形式のみ受付");
+}
+
 // ---- 静的ガード：BUILDマーカー ----
-ok(/const BUILD = "2026-07-15-15"/.test(html), "[静的] BUILDマーカー更新(11)");
+ok(/const BUILD = "2026-07-15-18"/.test(html), "[静的] BUILDマーカー更新(11)");
 
 // ---- 結果 ----
 console.log(`\n=== フロントエンド単体テスト結果 ===`);

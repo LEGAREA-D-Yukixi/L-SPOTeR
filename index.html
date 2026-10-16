@@ -419,7 +419,7 @@ function togglePw(btn){ const inp=btn.parentNode.querySelector("input"); if(!inp
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-15-17";
+const BUILD = "2026-07-15-18";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -576,13 +576,18 @@ async function loadDirectory(){
   return (p||[]).filter(x=>x.display_name).map(x=>({ id:x.id, name:x.display_name }));
 }
 function viewRange(){ if(S.view==="day"){ const s=dayStart(S.date); return [s, addDays(s,1)]; } const s=weekStart(S.date); return [s, addDays(s,7)]; }
+let _loadSeq=0;   // 予約読み込みの世代。重なったとき古い結果で新しい表示を上書きしない
 async function loadBookings(){
+  const my=++_loadSeq;
   const [a,b]=viewRange();
   let q = sb.from("bookings").select("*").lt("starts_at", b.toISOString()).gt("ends_at", a.toISOString()).order("starts_at");
   if(S.view==="week"){ const rid=$("weekRoom").value; if(rid) q=q.eq("room_id",rid); }
-  const { data } = await q; S.bookings = data||[];
+  const { data } = await q;
+  if(my!==_loadSeq) return false;   // 後から始まった読み込みがある → この結果は捨てる
+  S.bookings = data||[]; return true;
 }
-async function reload(){ await loadBookings(); render(); }
+async function reload(){ if(await loadBookings()) render(); }
+function overlapsDay(b, d){ const s=dayStart(d), e=addDays(s,1); return new Date(b.starts_at)<e && new Date(b.ends_at)>s; }
 
 function render(){
   $("dateLabel").textContent = S.view==="day"? fmtDateJP(S.date)
@@ -609,7 +614,7 @@ function renderDay(){
       if(dstr<today) h+=`<div class="pastband" style="top:0;bottom:0;left:0;width:${trackW}px"></div>`;
       else if(dstr===today){ const nm=Math.max(0,Math.min(minsFrom7(new Date()),hours*60)); if(nm>0) h+=`<div class="pastband" style="top:0;bottom:0;left:0;width:${nm/60*PX_H}px"></div>`; } }
     if(ymd(new Date())===ymd(S.date)){ const nm=minsFrom7(new Date()); if(nm>=0&&nm<=hours*60) h+=`<div class="nowline" style="left:${nm/60*PX_H}px"></div>`; }
-    for(const b of S.bookings.filter(x=>x.room_id===r.id)){
+    for(const b of S.bookings.filter(x=>x.room_id===r.id && overlapsDay(x, S.date))){
       const s=new Date(b.starts_at), e=new Date(b.ends_at);
       const clamp=(v,mx)=>Math.max(0,Math.min(v,mx));
       const left=clamp(minsFrom7(s)/60*PX_H, trackW); const right=clamp(minsFrom7(e)/60*PX_H, trackW); const width=Math.max(2, right-left);
@@ -837,18 +842,30 @@ async function insertBooking(p){
   }
   return await sb.from("bookings").insert(payload).select();
 }
-// 参加者がいる予約用に Lark 会議URLを発行（失敗時は null でフォールバック）
+// 参加者がいる予約用に Lark 会議URLを発行。戻り値 {url, reason}（作れなかった理由は保存後に表示）
 async function createMeetingLink(occ, topic){
-  if(!S.user||!S.user.email||!occ||!occ.length) return null;
+  const oids=chipOpenIds(S.chips);
+  if(!S.chips.length) return { url:null, reason:"none" };                    // 参加者なし（作らない）
+  if(!oids.length) return { url:null, reason:"no-participant-open-id" };     // 全員 通知対象外
+  if(!S.user||!S.user.email||!occ||!occ.length) return { url:null, reason:"bad-input" };
   const last=occ[occ.length-1];
+  if(last.end.getTime()<=Date.now()) return { url:null, reason:"past" };      // 過去は Lark が受け付けない
   try{
     const r=await fetch(SUPABASE_URL+"/functions/v1/create-lark-meeting", {
       method:"POST", headers:{ "Content-Type":"application/json", apikey:SUPABASE_ANON_KEY, Authorization:"Bearer "+SUPABASE_ANON_KEY },
-      body: JSON.stringify({ email:S.user.email, topic:topic||"会議", end_time: Math.floor(last.end.getTime()/1000) })
+      body: JSON.stringify({ email:S.user.email, topic:topic||"会議", end_time: Math.floor(last.end.getTime()/1000), participant_open_ids:oids })
     });
     const j=await r.json().catch(()=>({}));
-    return (j&&j.url)||null;
-  }catch(_){ return null; }
+    return (j&&j.url)? { url:j.url, reason:null } : { url:null, reason:(j&&j.reason)||"error" };
+  }catch(_){ return { url:null, reason:"network" }; }
+}
+// 会議リンクを作れなかった理由の文言（作らないのが正しいケースは null）
+function meetingFailMsg(reason){
+  if(!reason || reason==="none" || reason==="past") return null;
+  if(reason==="no-participant-open-id") return "参加者が全員「通知対象外」のため、会議リンクは作成していません。参加者は候補から選んでください。";
+  if(reason==="no-open-id") return "主催者・参加者のLark連携が見つからないため、会議リンクを作成できませんでした。";
+  if(reason==="network") return "通信エラーのため、会議リンクを作成できませんでした。";
+  return "Lark側で会議リンクを作成できませんでした（"+reason+"）。";
 }
 function renderMeeting(url){
   const el=$("bkMeeting"); if(!el) return;
@@ -1017,7 +1034,7 @@ async function saveBooking(){
         }
         const grp=(rule.freq!=="none" && occ.length>1)? g : null;   // シリーズ維持なら同じgroup
         const label=(rule.freq!=="none")? repeatRuleLabel(rule):null;
-        const meetingUrl = chipOpenIds(S.chips).length>0 ? await createMeetingLink(occ, base.title || (roomById(rid)&&roomById(rid).name)) : null;
+        const mtg = await createMeetingLink(occ, base.title || (roomById(rid)&&roomById(rid).name)); const meetingUrl = mtg.url;
         const del=await sb.from("bookings").delete().eq("recurrence_group",g).gte("starts_at", cur.starts_at).select();  // 先に将来分を削除
         if(del.error) throw del.error;
         if(!del.data||del.data.length===0) throw new Error("変更できる権限がありません（自分の予約のみ編集できます）");
@@ -1032,15 +1049,17 @@ async function saveBooking(){
         if(otherErr) throw otherErr;
         if(permErr) throw new Error("予約する権限がありません");
         closeModal("bkView"); await reload();
-        alert(`${created}件を更新しました${skipped?`（${skipped}件は重複でスキップ）`:""}`);
+        { const mw=meetingFailMsg(mtg.reason); alert(`${created}件を更新しました${skipped?`（${skipped}件は重複でスキップ）`:""}${mw?"\n\n"+mw:""}`); }
       } else {
-        // この予定のみ（単発の編集も同じ）
-        const payload={...base, starts_at:starts.toISOString(), ends_at:ends.toISOString(), notify_sent_at:null};
+        // この予定のみ（単発の編集も同じ）。参加者を後から足した場合もリンクが無ければ作る
+        const mtg = (cur&&cur.meeting_url) ? { url:null, reason:"none" } : await createMeetingLink([{ start:starts, end:ends }], base.title || (roomById(rid)&&roomById(rid).name));
+        const payload={...base, starts_at:starts.toISOString(), ends_at:ends.toISOString(), notify_sent_at:null, ...(mtg.url?{ meeting_url:mtg.url }:{})};
         let res=await sb.from("bookings").update(payload).eq("id",S.editId).select();
         if(res.error && /participant_open_ids/.test(res.error.message||"")){ const {participant_open_ids,...rest}=payload; res=await sb.from("bookings").update(rest).eq("id",S.editId).select(); }
         if(res.error) throw res.error;
         if(!res.data||res.data.length===0) throw new Error("変更できる権限がありません（自分の予約のみ編集できます）");
         closeModal("bkView"); await reload();
+        { const mw=meetingFailMsg(mtg.reason); if(mw) alert("予約を更新しました。\n\n"+mw); }
       }
     } else {
       // 新規: 繰り返し展開して複数挿入（重複回はスキップ）
@@ -1054,7 +1073,7 @@ async function saveBooking(){
       }
       const group=(rule.freq!=="none" && occ.length>1)? uuid4() : null;
       const label=group? repeatRuleLabel(rule):null;
-      const meetingUrl = chipOpenIds(S.chips).length>0 ? await createMeetingLink(occ, base.title || (roomById(rid)&&roomById(rid).name)) : null;
+      const mtg = await createMeetingLink(occ, base.title || (roomById(rid)&&roomById(rid).name)); const meetingUrl = mtg.url;
       let created=0, skipped=0, permErr=false, otherErr=null;
       for(const o of occ){
         const p={...base, starts_at:o.start.toISOString(), ends_at:o.end.toISOString(), notify_sent_at:null, recurrence_group:group, recurrence_rule:label, recurrence_rule_json:(group?rule:null), meeting_url:meetingUrl};
@@ -1070,7 +1089,9 @@ async function saveBooking(){
       if(permErr) throw new Error("予約する権限がありません");
       if(created===0){ msg.className="msg err"; msg.textContent = occ.length>1? "すべての回が既存予約と重複しています。":"この時間帯はすでに予約が入っています。"; return; }
       closeModal("bkView"); await reload();
-      if(occ.length>1) alert(`${created}件の予約を作成しました${skipped?`（${skipped}件は既存予約と重複のためスキップ）`:""}`);
+      { const mw=meetingFailMsg(mtg.reason);
+        if(occ.length>1) alert(`${created}件の予約を作成しました${skipped?`（${skipped}件は既存予約と重複のためスキップ）`:""}${mw?"\n\n"+mw:""}`);
+        else if(mw) alert("予約を作成しました。\n\n"+mw); }
     }
   }catch(e){ msg.className="msg err"; msg.textContent=mapBookingError(e); }
   finally{ $("bkSave").disabled=false; }
