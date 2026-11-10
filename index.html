@@ -419,7 +419,7 @@ function togglePw(btn){ const inp=btn.parentNode.querySelector("input"); if(!inp
 let drag=null;
 
 const $ = id => document.getElementById(id);
-const BUILD = "2026-07-15-18";
+const BUILD = "2026-07-15-20";
 console.log("L-SPOTeR build", BUILD);
 const pad = n => String(n).padStart(2,"0");
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
@@ -830,17 +830,29 @@ function bkRepeatUI(){
 }
 async function insertBooking(p){
   let payload={...p};
-  for(let i=0;i<5;i++){
+  for(let i=0;i<6;i++){
     const res=await sb.from("bookings").insert(payload).select();
     if(!res.error) return res;
     const m=res.error.message||"";
     if(/participant_open_ids/.test(m) && ("participant_open_ids" in payload)){ delete payload.participant_open_ids; continue; }
     if(/meeting_url/.test(m) && ("meeting_url" in payload)){ delete payload.meeting_url; continue; }
+    if(/cal_quiet|cal_batch/.test(m) && ("cal_batch" in payload)){ delete payload.cal_quiet; delete payload.cal_batch; continue; }
     if(/recurrence_rule_json/.test(m) && ("recurrence_rule_json" in payload)){ delete payload.recurrence_rule_json; continue; }
     if(/recurrence/.test(m) && (("recurrence_group" in payload)||("recurrence_rule" in payload))){ delete payload.recurrence_group; delete payload.recurrence_rule; delete payload.recurrence_rule_json; continue; }
     return res;
   }
   return await sb.from("bookings").insert(payload).select();
+}
+// 繰り返しの作成・「以降すべて」の変更/削除は「まとめ操作」。Larkカレンダーの個別通知を止め、1人1通にまとめて知らせる
+async function beginCalBatch(kind){
+  try{ const { data, error } = await sb.rpc("cal_batch_begin", { p_kind:kind }); return (!error && data) ? data : null; }catch(_){ return null; }
+}
+function calBatchReady(id){ if(!id) return; try{ sb.rpc("cal_batch_ready", { p_id:id }).then(()=>{}, ()=>{}); }catch(_){} }
+// 削除する前に印を付ける（削除時に印を見て、個別通知なしで消す）
+async function markCalBatch(id, group, from, inclusive){
+  if(!id) return;
+  try{ const q=sb.from("bookings").update({ cal_quiet:true, cal_batch:id }).eq("recurrence_group",group);
+       await (inclusive ? q.gte("starts_at", from) : q.gt("starts_at", from)); }catch(_){}
 }
 // 参加者がいる予約用に Lark 会議URLを発行。戻り値 {url, reason}（作れなかった理由は保存後に表示）
 async function createMeetingLink(occ, topic){
@@ -1035,17 +1047,20 @@ async function saveBooking(){
         const grp=(rule.freq!=="none" && occ.length>1)? g : null;   // シリーズ維持なら同じgroup
         const label=(rule.freq!=="none")? repeatRuleLabel(rule):null;
         const mtg = await createMeetingLink(occ, base.title || (roomById(rid)&&roomById(rid).name)); const meetingUrl = mtg.url;
+        const batch = await beginCalBatch("update");
+        await markCalBatch(batch, g, cur.starts_at, true);
         const del=await sb.from("bookings").delete().eq("recurrence_group",g).gte("starts_at", cur.starts_at).select();  // 先に将来分を削除
         if(del.error) throw del.error;
         if(!del.data||del.data.length===0) throw new Error("変更できる権限がありません（自分の予約のみ編集できます）");
         let created=0, skipped=0, permErr=false, otherErr=null;
         for(const o of occ){
-          const p={...base, starts_at:o.start.toISOString(), ends_at:o.end.toISOString(), notify_sent_at:null, recurrence_group:grp, recurrence_rule:label, recurrence_rule_json:(grp?rule:null), meeting_url:meetingUrl};
+          const p={...base, starts_at:o.start.toISOString(), ends_at:o.end.toISOString(), notify_sent_at:null, recurrence_group:grp, recurrence_rule:label, recurrence_rule_json:(grp?rule:null), meeting_url:meetingUrl, ...(batch?{ cal_quiet:true, cal_batch:batch }:{})};
           const res=await insertBooking(p);
           if(res.error){ if(res.error.code==="23P01"||/overlap|exclusion/i.test(res.error.message||"")){ skipped++; continue; } otherErr=res.error; break; }
           if(!res.data||res.data.length===0){ permErr=true; break; }
           created++;
         }
+        calBatchReady(batch);
         if(otherErr) throw otherErr;
         if(permErr) throw new Error("予約する権限がありません");
         closeModal("bkView"); await reload();
@@ -1074,9 +1089,10 @@ async function saveBooking(){
       const group=(rule.freq!=="none" && occ.length>1)? uuid4() : null;
       const label=group? repeatRuleLabel(rule):null;
       const mtg = await createMeetingLink(occ, base.title || (roomById(rid)&&roomById(rid).name)); const meetingUrl = mtg.url;
+      const batch = occ.length>1 ? await beginCalBatch("create") : null;
       let created=0, skipped=0, permErr=false, otherErr=null;
       for(const o of occ){
-        const p={...base, starts_at:o.start.toISOString(), ends_at:o.end.toISOString(), notify_sent_at:null, recurrence_group:group, recurrence_rule:label, recurrence_rule_json:(group?rule:null), meeting_url:meetingUrl};
+        const p={...base, starts_at:o.start.toISOString(), ends_at:o.end.toISOString(), notify_sent_at:null, recurrence_group:group, recurrence_rule:label, recurrence_rule_json:(group?rule:null), meeting_url:meetingUrl, ...(batch?{ cal_quiet:true, cal_batch:batch }:{})};
         const res=await insertBooking(p);
         if(res.error){
           if(res.error.code==="23P01" || /overlap|exclusion/i.test(res.error.message||"")){ skipped++; continue; }
@@ -1085,6 +1101,7 @@ async function saveBooking(){
         if(!res.data||res.data.length===0){ permErr=true; break; }
         created++;
       }
+      calBatchReady(batch);
       if(otherErr) throw otherErr;
       if(permErr) throw new Error("予約する権限がありません");
       if(created===0){ msg.className="msg err"; msg.textContent = occ.length>1? "すべての回が既存予約と重複しています。":"この時間帯はすでに予約が入っています。"; return; }
@@ -1119,7 +1136,10 @@ async function deleteBooking(){
     if(up.error){ setErr("更新に失敗しました: "+up.error.message); return; }
     if(!up.data||up.data.length===0){ setErr("変更できる権限がありません（自分の予約、または管理者のみ）。"); return; }
     if(g && confirm("この予約は繰り返しです。この回以降の予定も削除しますか？")){
+      const batch = await beginCalBatch("delete");
+      await markCalBatch(batch, g, b.starts_at, false);
       await sb.from("bookings").delete().eq("recurrence_group",g).gt("starts_at", b.starts_at);
+      calBatchReady(batch);
     }
     closeModal("bkView"); await reload(); return;
   }
@@ -1132,10 +1152,13 @@ async function deleteBooking(){
   } else {
     if(!confirm("この予約を取り消しますか？")) return;
   }
+  const batch = (scope==="future") ? await beginCalBatch("delete") : null;
+  await markCalBatch(batch, g, b.starts_at, true);
   const q = (scope==="future")
     ? sb.from("bookings").delete().eq("recurrence_group",g).gte("starts_at", b.starts_at)
     : sb.from("bookings").delete().eq("id",S.editId);
   const { data, error } = await q.select();
+  calBatchReady(batch);
   if(error){ setErr("取消に失敗しました: "+error.message); return; }
   if(!data||data.length===0){ setErr("取消できる権限がありません（自分の予約、または管理者のみ）。"); return; }
   closeModal("bkView"); await reload();
